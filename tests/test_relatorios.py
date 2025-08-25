@@ -1,9 +1,6 @@
-import json
 from datetime import date, timedelta
 
-import pytest
 
-from estoque.config import DB_PATH
 from estoque.infra.migrations import apply_migrations
 from estoque.infra.views import create_views
 from estoque.infra.db import connect
@@ -20,7 +17,6 @@ from estoque.usecases.relatorios import (
     relatorio_mais_consumidos,
     relatorio_reposicao,
 )
-from estoque.usecases.verificar_estoque import run_verificar
 
 
 def _seed_basic_params(db_path):

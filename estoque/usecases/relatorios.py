@@ -10,14 +10,13 @@ Relatórios de estoque:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
-from estoque.config import DB_PATH, DEFAULTS
+from estoque.config import DB_PATH
 from estoque.infra.db import connect
 from estoque.infra.migrations import apply_migrations
 from estoque.infra.views import create_views
 from estoque.infra.repositories import (
-    ParamsRepo,
     ProdutoRepo,
     DimConsumoRepo,
     SnapshotRepo,
@@ -62,7 +61,6 @@ def relatorio_alerta_ruptura(horizonte_dias: int = 7, db_path: str = DB_PATH) ->
     create_views(db_path)
 
     # repos e params
-    params = ParamsRepo(db_path)
     produto_repo = ProdutoRepo(db_path)
     dim_repo = DimConsumoRepo(db_path)
     snap_repo = SnapshotRepo(db_path)
