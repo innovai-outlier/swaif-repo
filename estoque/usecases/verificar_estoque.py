@@ -97,10 +97,9 @@ def _convert_between_scales(
     # Não sabemos aqui qual lado é qual; chamador garante coerência.
     # Se der mismatch, ainda assim a conversão abaixo atende:
     if src_unit.isupper() and dst_unit.isupper():
-        # Tenta os dois caminhos
-        to_cli = float(qtd) * fator
-        to_apr = float(qtd) / fator
-        # O chamador deve saber qual usar; aqui retornamos None para forçar decisão explícita
+        # Tenta os dois caminhos mas retorna None para forçar decisão explícita
+        # to_cli = float(qtd) * fator
+        # to_apr = float(qtd) / fator
         return None
     return None
 
@@ -167,9 +166,7 @@ def run_verificar(db_path: str = DB_PATH) -> List[Dict]:
         # Estoque atual nas duas escalas
         est = estoque_c.get(codigo, {})
         est_apr = float(est.get("apres_num") or 0.0)
-        est_apr_un = est.get("apres_un") or un_apr
         est_cli = float(est.get("unid_num") or 0.0)
-        est_cli_un = est.get("unid_un") or un_cli
 
         # Escala alvo (unidade de cálculo)
         if tipo == "dose_fracionada":
