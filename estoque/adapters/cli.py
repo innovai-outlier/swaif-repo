@@ -207,6 +207,26 @@ def rel_reposicao_cmd(
     res = relatorio_reposicao(db_path=db_path)
     _print_json(res)
     
+@app.command("tui")
+def cmd_tui():
+    """
+    Inicia a Interface Terminal (TUI) interativa do sistema.
+    
+    A TUI fornece uma interface de menu amigável para navegar e executar
+    todas as funções do sistema sem precisar lembrar comandos específicos.
+    """
+    try:
+        from estoque.adapters.mainframe_tui import main as tui_main
+        typer.echo("🚀 Iniciando Interface Terminal...")
+        tui_main()
+    except ImportError:
+        typer.echo("❌ TUI não disponível. Instale: pip install textual")
+        raise typer.Exit(1)
+    except KeyboardInterrupt:
+        typer.echo("\n👋 Saindo do TUI...")
+        raise typer.Exit(0)
+
+
 # Entry point opcional:
 def main():
     app()
