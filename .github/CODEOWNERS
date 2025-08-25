@@ -1,0 +1,5 @@
+# Donos obrigatórios para PRs em main
+# Ajuste os handles conforme seu time/org
+* @carreira.outlier
+/estoque/** @carreira.outlier
+/tests/** @carreira.outlier

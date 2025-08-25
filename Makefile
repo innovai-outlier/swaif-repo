@@ -1,69 +1,154 @@
-# Makefile — Estoque Clínica
-# Uso rápido:
-#   make scaffold   # cria toda a árvore de diretórios e arquivos vazios
-#   make validate   # valida se a estrutura de diretórios está completa
-#   make clean      # remove caches
+# ====== CONFIG ======
+PY?=python3
+VENV?=.venv
+PIP=$(VENV)/bin/pip
+PYTHON=$(VENV)/bin/python
+PYTEST=$(VENV)/bin/pytest
+RUFF=$(VENV)/bin/ruff
 
-.PHONY: scaffold clean validate
+DB?=estoque.db
 
-scaffold:
-	@echo ">> Criando estrutura de diretórios..."
-	@mkdir -p estoque/domain estoque/adapters estoque/infra estoque/usecases tests
-	@touch README.md
-	@test -f pyproject.toml || echo "[project]\nname = \"estoque-clinica\"\nversion = \"0.1.0\"\nrequires-python = \">=3.10\"\n" > pyproject.toml
-	@touch app.py
-	@touch estoque/__init__.py
-	@touch estoque/config.py
-	@touch estoque/domain/__init__.py estoque/domain/models.py estoque/domain/formulas.py estoque/domain/policies.py
-	@touch estoque/adapters/__init__.py estoque/adapters/cli.py estoque/adapters/parsers.py estoque/adapters/gds_loader.py
-	@touch estoque/infra/__init__.py estoque/infra/db.py estoque/infra/migrations.py estoque/infra/repositories.py estoque/infra/views.py
-	@touch estoque/usecases/__init__.py estoque/usecases/verificar_estoque.py estoque/usecases/registrar_entrada.py estoque/usecases/registrar_saida.py
-	@touch tests/__init__.py tests/test_parsers.py tests/test_formulas.py tests/test_cli.py
-	@echo "✅ Estrutura criada (arquivos vazios + pyproject.toml mínimo)."
-	@$(MAKE) validate
+# ====== HELP ======
+.PHONY: help
+help:
+	@echo "Alvos principais:"
+	@echo "  make venv           -> cria venv local em $(VENV)"
+	@echo "  make install        -> instala dependências (app + dev)"
+	@echo "  make install-min    -> instala dependências mínimas (sem dev)"
+	@echo "  make migrate        -> aplica migrações e cria views (DB=$(DB))"
+	@echo "  make verificar      -> executa cálculo completo (DB=$(DB))"
+	@echo "  make params-show    -> exibe parâmetros globais (DB=$(DB))"
+	@echo "  make params-set NS=0.95 MU=6 ST=1 -> grava parâmetros"
+	@echo "  make entrada-lotes FILE=entradas.xlsx (DB=$(DB))"
+	@echo "  make saida-lotes  FILE=saidas.xlsx   (DB=$(DB))"
+	@echo "  make rel-ruptura H=3 DB=$(DB)       -> relatório de ruptura"
+	@echo "  make rel-vencimentos D=60 DB=$(DB) -> relatório de vencimentos"
+	@echo "  make rel-top INI=2025-01 FIM=2025-06 N=10 DB=$(DB) -> top consumo"
+	@echo "  make rel-reposicao DB=$(DB)        -> relatório de reposição"
+	@echo "  make test          -> pytest"
+	@echo "  make lint          -> ruff check"
+	@echo "  make doctor        -> lint + tests + lock-verify"
+	@echo "  make ci            -> pipeline local completa"
+	@echo "  make clean/distclean -> limpeza"
 
-validate:
-	@echo ">> Validando estrutura de diretórios..."
-	@echo "Verificando diretórios principais:"
-	@test -d estoque && echo "  ✅ estoque/" || (echo "  ❌ estoque/" && exit 1)
-	@test -d estoque/domain && echo "  ✅ estoque/domain/" || (echo "  ❌ estoque/domain/" && exit 1)
-	@test -d estoque/adapters && echo "  ✅ estoque/adapters/" || (echo "  ❌ estoque/adapters/" && exit 1)
-	@test -d estoque/infra && echo "  ✅ estoque/infra/" || (echo "  ❌ estoque/infra/" && exit 1)
-	@test -d estoque/usecases && echo "  ✅ estoque/usecases/" || (echo "  ❌ estoque/usecases/" && exit 1)
-	@test -d tests && echo "  ✅ tests/" || (echo "  ❌ tests/" && exit 1)
-	@echo "Verificando arquivos principais:"
-	@test -f README.md && echo "  ✅ README.md" || (echo "  ❌ README.md" && exit 1)
-	@test -f pyproject.toml && echo "  ✅ pyproject.toml" || (echo "  ❌ pyproject.toml" && exit 1)
-	@test -f app.py && echo "  ✅ app.py" || (echo "  ❌ app.py" && exit 1)
-	@test -f estoque/__init__.py && echo "  ✅ estoque/__init__.py" || (echo "  ❌ estoque/__init__.py" && exit 1)
-	@test -f estoque/config.py && echo "  ✅ estoque/config.py" || (echo "  ❌ estoque/config.py" && exit 1)
-	@echo "Verificando arquivos do domínio:"
-	@test -f estoque/domain/__init__.py && echo "  ✅ estoque/domain/__init__.py" || (echo "  ❌ estoque/domain/__init__.py" && exit 1)
-	@test -f estoque/domain/models.py && echo "  ✅ estoque/domain/models.py" || (echo "  ❌ estoque/domain/models.py" && exit 1)
-	@test -f estoque/domain/formulas.py && echo "  ✅ estoque/domain/formulas.py" || (echo "  ❌ estoque/domain/formulas.py" && exit 1)
-	@test -f estoque/domain/policies.py && echo "  ✅ estoque/domain/policies.py" || (echo "  ❌ estoque/domain/policies.py" && exit 1)
-	@echo "Verificando arquivos dos adaptadores:"
-	@test -f estoque/adapters/__init__.py && echo "  ✅ estoque/adapters/__init__.py" || (echo "  ❌ estoque/adapters/__init__.py" && exit 1)
-	@test -f estoque/adapters/cli.py && echo "  ✅ estoque/adapters/cli.py" || (echo "  ❌ estoque/adapters/cli.py" && exit 1)
-	@test -f estoque/adapters/parsers.py && echo "  ✅ estoque/adapters/parsers.py" || (echo "  ❌ estoque/adapters/parsers.py" && exit 1)
-	@test -f estoque/adapters/gds_loader.py && echo "  ✅ estoque/adapters/gds_loader.py" || (echo "  ❌ estoque/adapters/gds_loader.py" && exit 1)
-	@echo "Verificando arquivos da infraestrutura:"
-	@test -f estoque/infra/__init__.py && echo "  ✅ estoque/infra/__init__.py" || (echo "  ❌ estoque/infra/__init__.py" && exit 1)
-	@test -f estoque/infra/db.py && echo "  ✅ estoque/infra/db.py" || (echo "  ❌ estoque/infra/db.py" && exit 1)
-	@test -f estoque/infra/migrations.py && echo "  ✅ estoque/infra/migrations.py" || (echo "  ❌ estoque/infra/migrations.py" && exit 1)
-	@test -f estoque/infra/repositories.py && echo "  ✅ estoque/infra/repositories.py" || (echo "  ❌ estoque/infra/repositories.py" && exit 1)
-	@test -f estoque/infra/views.py && echo "  ✅ estoque/infra/views.py" || (echo "  ❌ estoque/infra/views.py" && exit 1)
-	@echo "Verificando arquivos dos casos de uso:"
-	@test -f estoque/usecases/__init__.py && echo "  ✅ estoque/usecases/__init__.py" || (echo "  ❌ estoque/usecases/__init__.py" && exit 1)
-	@test -f estoque/usecases/verificar_estoque.py && echo "  ✅ estoque/usecases/verificar_estoque.py" || (echo "  ❌ estoque/usecases/verificar_estoque.py" && exit 1)
-	@test -f estoque/usecases/registrar_entrada.py && echo "  ✅ estoque/usecases/registrar_entrada.py" || (echo "  ❌ estoque/usecases/registrar_entrada.py" && exit 1)
-	@test -f estoque/usecases/registrar_saida.py && echo "  ✅ estoque/usecases/registrar_saida.py" || (echo "  ❌ estoque/usecases/registrar_saida.py" && exit 1)
-	@echo "Verificando arquivos de teste:"
-	@test -f tests/__init__.py && echo "  ✅ tests/__init__.py" || (echo "  ❌ tests/__init__.py" && exit 1)
-	@test -f tests/test_parsers.py && echo "  ✅ tests/test_parsers.py" || (echo "  ❌ tests/test_parsers.py" && exit 1)
-	@test -f tests/test_formulas.py && echo "  ✅ tests/test_formulas.py" || (echo "  ❌ tests/test_formulas.py" && exit 1)
-	@test -f tests/test_cli.py && echo "  ✅ tests/test_cli.py" || (echo "  ❌ tests/test_cli.py" && exit 1)
-	@echo "🎉 Estrutura de diretórios válida!"
+# ====== VENV / INSTALL ======
+$(VENV):
+	$(PY) -m venv $(VENV)
+	$(PIP) install --upgrade pip setuptools wheel
 
+.PHONY: venv
+venv: $(VENV)
+
+.PHONY: install
+install: venv
+	$(PIP) install -e .
+	$(PIP) install pandas openpyxl scipy typer tabulate
+	$(PIP) install pytest pytest-cov ruff
+
+.PHONY: install-min
+install-min: venv
+	$(PIP) install -e .
+	$(PIP) install pandas openpyxl scipy typer tabulate
+
+# ====== MIGRAÇÃO / OPERAÇÃO ======
+.PHONY: migrate
+migrate:
+	$(PYTHON) app.py migrate --db $(DB)
+
+.PHONY: verificar
+verificar:
+	$(PYTHON) app.py verificar --db $(DB)
+
+.PHONY: params-show
+params-show:
+	$(PYTHON) app.py params show --db $(DB)
+
+.PHONY: params-set
+params-set:
+	@if [ -z "$(NS)" ] && [ -z "$(MU)" ] && [ -z "$(ST)" ]; then \
+	  echo "Uso: make params-set NS=<nivel_servico> MU=<mu_t> ST=<sigma_t>"; \
+	  exit 1; \
+	fi
+	$(PYTHON) app.py params set --db $(DB) \
+		$(if $(NS),--nivel-servico $(NS),) \
+		$(if $(MU),--mu-t-dias-uteis $(MU),) \
+		$(if $(ST),--sigma-t-dias-uteis $(ST),)
+
+# ====== MOVIMENTAÇÃO (LOTE) ======
+.PHONY: entrada-lotes
+entrada-lotes:
+	@if [ -z "$(FILE)" ]; then echo "Informe FILE=<planilha.xlsx>"; exit 1; fi
+	$(PYTHON) app.py entrada-lotes "$(FILE)" --db $(DB)
+
+.PHONY: saida-lotes
+saida-lotes:
+	@if [ -z "$(FILE)" ]; then echo "Informe FILE=<planilha.xlsx>"; exit 1; fi
+	$(PYTHON) app.py saida-lotes "$(FILE)" --db $(DB)
+
+# ====== RELATÓRIOS ======
+.PHONY: rel-ruptura
+rel-ruptura:
+	@if [ -z "$(H)" ]; then echo "Uso: make rel-ruptura H=<horizonte_dias>"; exit 1; fi
+	$(PYTHON) app.py rel ruptura --horizonte-dias $(H) --db $(DB)
+
+.PHONY: rel-vencimentos
+rel-vencimentos:
+	@if [ -z "$(D)" ]; then echo "Uso: make rel-vencimentos D=<janela_dias>"; exit 1; fi
+	$(PYTHON) app.py rel vencimentos --janela-dias $(D) \
+		$$( [ "$(DETALHE)" = "0" ] && echo "--no-detalhar-por-lote" || echo "" ) \
+		--db $(DB)
+
+.PHONY: rel-top
+rel-top:
+	@if [ -z "$(INI)" ] || [ -z "$(FIM)" ]; then echo "Uso: make rel-top INI=YYYY-MM FIM=YYYY-MM [N=20]"; exit 1; fi
+	$(PYTHON) app.py rel top-consumo --inicio-ano-mes $(INI) --fim-ano-mes $(FIM) \
+		$$( [ -n "$(N)" ] && echo "--top-n $(N)" || echo "" ) \
+		--db $(DB)
+
+.PHONY: rel-reposicao
+rel-reposicao:
+	$(PYTHON) app.py rel reposicao --db $(DB)
+
+# ====== TESTES / LINT ======
+.PHONY: test
+test:
+	$(PYTEST) -q --maxfail=1 --disable-warnings --cov=estoque --cov-report=term-missing
+
+.PHONY: lint
+lint:
+	$(RUFF) check .
+
+# ====== LOCK ======
+.PHONY: lock
+lock: install
+	@echo ">> Gerando constraints.txt ..."
+	@$(PYTHON) -m pip freeze | grep -v "^-e " > constraints.txt
+	@echo ">> constraints.txt atualizado."
+
+.PHONY: relock
+relock: distclean venv install lock
+	@echo ">> Relock concluído."
+
+.PHONY: lock-verify
+lock-verify: distclean venv
+	@$(PIP) install -r requirements.txt -c constraints.txt
+
+# ====== HEALTHCHECK ======
+.PHONY: doctor
+doctor: lint test lock-verify
+	@echo ">> Tudo certo: lint + tests + lock verificados."
+
+.PHONY: ci
+ci: install migrate doctor
+	@echo ">> Rodando relatório de ruptura (horizonte=5) como sanity-check..."
+	$(PYTHON) app.py rel ruptura --horizonte-dias 5 --db $(DB)
+
+# ====== CLEAN ======
+.PHONY: clean
 clean:
-	rm -rf __pycache__ */__pycache__ .pytest_cache .mypy_cache build dist htmlcov *.egg-info
+	@find . -type d -name "__pycache__" -exec rm -rf {} +
+	@rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
+
+.PHONY: distclean
+distclean: clean
+	@rm -rf $(VENV)
