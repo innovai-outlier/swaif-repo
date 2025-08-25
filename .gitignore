@@ -50,3 +50,6 @@ Thumbs.db
 !README.md
 !app.py
 !pyproject.toml
+
+# Virtual environments
+.venv/
