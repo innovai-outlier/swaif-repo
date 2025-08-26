@@ -15,6 +15,7 @@ help:
 	@echo "  make venv           -> cria venv local em $(VENV)"
 	@echo "  make install        -> instala dependências (app + dev)"
 	@echo "  make install-min    -> instala dependências mínimas (sem dev)"
+	@echo "  make tui            -> inicia Interface Gráfica (TUI/Mainframe)"
 	@echo "  make migrate        -> aplica migrações e cria views (DB=$(DB))"
 	@echo "  make verificar      -> executa cálculo completo (DB=$(DB))"
 	@echo "  make params-show    -> exibe parâmetros globais (DB=$(DB))"
@@ -42,29 +43,29 @@ venv: $(VENV)
 .PHONY: install
 install: venv
 	$(PIP) install -e .
-	$(PIP) install pandas openpyxl scipy typer tabulate
+	$(PIP) install pandas openpyxl scipy typer tabulate textual
 	$(PIP) install pytest pytest-cov ruff
 
 .PHONY: install-min
 install-min: venv
 	$(PIP) install -e .
-	$(PIP) install pandas openpyxl scipy typer tabulate
+	$(PIP) install pandas openpyxl scipy typer tabulate textual
 
 # ====== MIGRAÇÃO / OPERAÇÃO ======
 .PHONY: migrate
-migrate:
+migrate: venv
 	$(PYTHON) app.py migrate --db $(DB)
 
 .PHONY: verificar
-verificar:
+verificar: venv
 	$(PYTHON) app.py verificar --db $(DB)
 
 .PHONY: params-show
-params-show:
+params-show: venv
 	$(PYTHON) app.py params show --db $(DB)
 
 .PHONY: params-set
-params-set:
+params-set: venv
 	@if [ -z "$(NS)" ] && [ -z "$(MU)" ] && [ -z "$(ST)" ]; then \
 	  echo "Uso: make params-set NS=<nivel_servico> MU=<mu_t> ST=<sigma_t>"; \
 	  exit 1; \
@@ -76,46 +77,55 @@ params-set:
 
 # ====== MOVIMENTAÇÃO (LOTE) ======
 .PHONY: entrada-lotes
-entrada-lotes:
+entrada-lotes: venv
 	@if [ -z "$(FILE)" ]; then echo "Informe FILE=<planilha.xlsx>"; exit 1; fi
 	$(PYTHON) app.py entrada-lotes "$(FILE)" --db $(DB)
 
 .PHONY: saida-lotes
-saida-lotes:
+saida-lotes: venv
 	@if [ -z "$(FILE)" ]; then echo "Informe FILE=<planilha.xlsx>"; exit 1; fi
 	$(PYTHON) app.py saida-lotes "$(FILE)" --db $(DB)
 
 # ====== RELATÓRIOS ======
 .PHONY: rel-ruptura
-rel-ruptura:
+rel-ruptura: venv
 	@if [ -z "$(H)" ]; then echo "Uso: make rel-ruptura H=<horizonte_dias>"; exit 1; fi
 	$(PYTHON) app.py rel ruptura --horizonte-dias $(H) --db $(DB)
 
 .PHONY: rel-vencimentos
-rel-vencimentos:
+rel-vencimentos: venv
 	@if [ -z "$(D)" ]; then echo "Uso: make rel-vencimentos D=<janela_dias>"; exit 1; fi
 	$(PYTHON) app.py rel vencimentos --janela-dias $(D) \
 		$$( [ "$(DETALHE)" = "0" ] && echo "--no-detalhar-por-lote" || echo "" ) \
 		--db $(DB)
 
 .PHONY: rel-top
-rel-top:
+rel-top: venv
 	@if [ -z "$(INI)" ] || [ -z "$(FIM)" ]; then echo "Uso: make rel-top INI=YYYY-MM FIM=YYYY-MM [N=20]"; exit 1; fi
 	$(PYTHON) app.py rel top-consumo --inicio-ano-mes $(INI) --fim-ano-mes $(FIM) \
 		$$( [ -n "$(N)" ] && echo "--top-n $(N)" || echo "" ) \
 		--db $(DB)
 
 .PHONY: rel-reposicao
-rel-reposicao:
+rel-reposicao: venv
 	$(PYTHON) app.py rel reposicao --db $(DB)
+
+# ====== TUI / MAINFRAME ======
+.PHONY: tui
+tui: install
+	@echo ">> Iniciando Interface Gráfica (TUI)..."
+	$(PYTHON) mainframe.py
+
+.PHONY: mainframe
+mainframe: tui
 
 # ====== TESTES / LINT ======
 .PHONY: test
-test:
+test: venv
 	$(PYTEST) -q --maxfail=1 --disable-warnings --cov=estoque --cov-report=term-missing
 
 .PHONY: lint
-lint:
+lint: venv
 	$(RUFF) check .
 
 # ====== LOCK ======
