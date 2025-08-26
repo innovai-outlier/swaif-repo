@@ -237,6 +237,9 @@ class EntradaRepo:
 
     def insert(self, row: Dict[str, Any]) -> None:
         row = _as_dict(row)
+        # Provide default None for responsavel if missing (for backwards compatibility)
+        if "responsavel" not in row:
+            row["responsavel"] = None
         with connect(self.db_path) as c:
             c.execute(
                 """
@@ -254,6 +257,10 @@ class EntradaRepo:
         rows = [ _as_dict(r) for r in rows ]
         if not rows:
             return
+        # Provide default None for responsavel if missing (for backwards compatibility)
+        for row in rows:
+            if "responsavel" not in row:
+                row["responsavel"] = None
         with connect(self.db_path) as c:
             c.executemany(
                 """

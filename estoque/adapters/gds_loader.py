@@ -126,6 +126,10 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
         "cod": "codigo",
         "id": "codigo",
 
+        "produto": "produto",
+        "nome": "produto",
+        "nome do produto": "produto",
+
         "quantidade": "quantidade_raw",
         "qtde": "quantidade_raw",
         "qtd": "quantidade_raw",
@@ -192,6 +196,7 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
     """Lê XLSX de ENTRADAS e retorna registros compatíveis com a tabela `entrada`.
 
     Campos de saída (chaves do dict por linha):
+      - produto: str | None
       - data_entrada: ISO date (YYYY-MM-DD) ou None
       - codigo: str | None
       - quantidade_raw: str | None
@@ -200,7 +205,6 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
       - valor_unitario: str | None  (não convertemos para float aqui)
       - nota_fiscal: str | None
       - representante: str | None
-      - responsavel: str | None
       - pago: 0/1 | None
     """
     df = pd.read_excel(path, dtype="string")
@@ -210,6 +214,7 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
     for _, row in df.iterrows():
         data_entrada = _first_nonnull(_safe_get(row, "data_entrada"), _safe_get(row, "data"))
         rec = {
+            "produto": _safe_get(row, "produto"),
             "data_entrada": _to_date_iso(data_entrada),
             "codigo": _safe_get(row, "codigo"),
             "quantidade_raw": _safe_get(row, "quantidade_raw"),
@@ -218,7 +223,6 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
             "valor_unitario": _safe_get(row, "valor_unitario"),
             "nota_fiscal": _safe_get(row, "nota_fiscal"),
             "representante": _safe_get(row, "representante"),
-            "responsavel": _safe_get(row, "responsavel"),
             "pago": _to_bool01(_safe_get(row, "pago")),
         }
         out.append(rec)
