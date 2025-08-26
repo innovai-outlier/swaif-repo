@@ -3,7 +3,7 @@ Tests for the mainframe TUI system.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import os
 from pathlib import Path
 
@@ -270,7 +270,6 @@ class TestTUIIntegration:
         """Test that the launcher script works."""
         # Import the launcher module
         import sys
-        from pathlib import Path
         
         # Add project root to path
         project_root = Path(__file__).parent.parent.parent

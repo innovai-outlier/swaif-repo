@@ -39,16 +39,37 @@ def _slug(s: str) -> str:
     return s
 
 
+def _clean_na(val: Any) -> Any:
+    """Converte pandas NA para None."""
+    if val is None:
+        return None
+    if hasattr(pd, 'isna') and pd.isna(val):
+        return None
+    if hasattr(val, '__class__') and 'NAType' in str(type(val)):
+        return None
+    return val
+
+
 def _first_nonnull(*vals):
     for v in vals:
-        if v is not None:
+        if v is not None and not (hasattr(v, '__class__') and 'NAType' in str(type(v))):
+            # Check if it's a pandas NA
+            if hasattr(pd, 'isna') and pd.isna(v):
+                continue
             return v
     return None
 
 
 def _to_bool01(val: Any) -> Optional[int]:
     """Converte valores variados em 0/1 (ou None)."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
+    if val is None:
+        return None
+    # Check for pandas NA
+    if hasattr(pd, 'isna') and pd.isna(val):
+        return None
+    if isinstance(val, float) and pd.isna(val):
+        return None
+    if hasattr(val, '__class__') and 'NAType' in str(type(val)):
         return None
     s = str(val).strip().lower()
     if s in {"1", "true", "t", "sim", "s", "y", "yes"}:
@@ -67,7 +88,14 @@ def _to_bool01(val: Any) -> Optional[int]:
 
 def _to_date_iso(val: Any) -> Optional[str]:
     """Converte valor para data ISO (YYYY-MM-DD) se possível."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
+    if val is None:
+        return None
+    # Check for pandas NA
+    if hasattr(pd, 'isna') and pd.isna(val):
+        return None
+    if isinstance(val, float) and pd.isna(val):
+        return None
+    if hasattr(val, '__class__') and 'NAType' in str(type(val)):
         return None
     # pandas já pode vir como Timestamp
     if isinstance(val, (pd.Timestamp, )):
@@ -190,14 +218,14 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
         data_entrada = _first_nonnull(row.get("data_entrada"), row.get("data"))
         rec = {
             "data_entrada": _to_date_iso(data_entrada),
-            "codigo": (row.get("codigo") or None),
-            "quantidade_raw": (row.get("quantidade_raw") or None),
-            "lote": (row.get("lote") or None),
+            "codigo": _clean_na(row.get("codigo")),
+            "quantidade_raw": _clean_na(row.get("quantidade_raw")),
+            "lote": _clean_na(row.get("lote")),
             "data_validade": _to_date_iso(row.get("data_validade")),
-            "valor_unitario": (row.get("valor_unitario") or None),
-            "nota_fiscal": (row.get("nota_fiscal") or None),
-            "representante": (row.get("representante") or None),
-            "responsavel": (row.get("responsavel") or None),
+            "valor_unitario": _clean_na(row.get("valor_unitario")),
+            "nota_fiscal": _clean_na(row.get("nota_fiscal")),
+            "representante": _clean_na(row.get("representante")),
+            "responsavel": _clean_na(row.get("responsavel")),
             "pago": _to_bool01(row.get("pago")),
         }
         out.append(rec)
@@ -227,13 +255,13 @@ def load_saidas_from_xlsx(path: str) -> List[Dict[str, Any]]:
         data_saida = _first_nonnull(row.get("data_saida"), row.get("data"))
         rec = {
             "data_saida": _to_date_iso(data_saida),
-            "codigo": (row.get("codigo") or None),
-            "quantidade_raw": (row.get("quantidade_raw") or None),
-            "lote": (row.get("lote") or None),
+            "codigo": _clean_na(row.get("codigo")),
+            "quantidade_raw": _clean_na(row.get("quantidade_raw")),
+            "lote": _clean_na(row.get("lote")),
             "data_validade": _to_date_iso(row.get("data_validade")),
-            "custo": (row.get("custo") or None),
-            "paciente": (row.get("paciente") or None),
-            "responsavel": (row.get("responsavel") or None),
+            "custo": _clean_na(row.get("custo")),
+            "paciente": _clean_na(row.get("paciente")),
+            "responsavel": _clean_na(row.get("responsavel")),
             "descarte_flag": _to_bool01(row.get("descarte_flag")),
         }
         out.append(rec)
