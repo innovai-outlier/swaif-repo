@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 from estoque.config import DB_PATH
-from estoque.infra.repositories import EntradaRepo, ProdutoRepo
+from estoque.infra.repositories import EntradaRepo, ProdutoRepo, DimConsumoRepo
 from estoque.adapters.gds_loader import load_entradas_from_xlsx
 
 # Pequenos utilitários locais (repetidos aqui para evitar imports de privados)
@@ -39,6 +39,44 @@ def _normalize_str(x: Any) -> Optional[str]:
         return None
     s = str(x).strip()
     return s or None
+
+
+def _ensure_product_exists(codigo: str, db_path: str) -> None:
+    """Ensures a product exists in the database, creating it if necessary."""
+    from estoque.infra.db import connect
+    
+    # Check if product exists
+    with connect(db_path) as c:
+        existing = c.execute("SELECT codigo FROM produto WHERE codigo = ?", (codigo,)).fetchone()
+        if existing:
+            return
+    
+    # Create product and dim_consumo entries
+    prod_repo = ProdutoRepo(db_path)
+    dim_repo = DimConsumoRepo(db_path)
+    
+    # Create basic product entry
+    prod_repo.upsert([{
+        "codigo": codigo,
+        "nome": f"Auto-created: {codigo}",
+        "categoria": "AUTO",
+        "controle_lotes": 1,
+        "controle_validade": 1,
+        "lote_min": 1,
+        "lote_mult": 1,
+        "quantidade_minima": 0,
+    }])
+    
+    # Create basic dim_consumo entry
+    dim_repo.upsert([{
+        "codigo": codigo,
+        "tipo_consumo": "dose_unica",
+        "unidade_apresentacao": "UN",
+        "unidade_clinica": "UN",
+        "fator_conversao": 1,
+        "via_aplicacao": "ORAL",
+        "observacao": "Auto-created product",
+    }])
 
 
 def run_entrada_unica(db_path: str = DB_PATH) -> Dict[str, Any]:
@@ -67,6 +105,10 @@ def run_entrada_unica(db_path: str = DB_PATH) -> Dict[str, Any]:
         "responsavel":   _normalize_str(responsavel),
         "pago":          _to_bool01(pago) if pago else None,
     }
+    
+    # Ensure product exists before inserting
+    _ensure_product_exists(codigo, db_path)
+    
     repo = EntradaRepo(db_path)
     repo.insert(rec)
     print(">> Entrada registrada com sucesso.")
@@ -74,39 +116,14 @@ def run_entrada_unica(db_path: str = DB_PATH) -> Dict[str, Any]:
 
 
 def run_entrada_lote(path: str, db_path: str = DB_PATH) -> Dict[str, Any]:
-    """Lê um XLSX de ENTRADAS e insere todas as linhas na tabela `entrada`.
-    
-    Automaticamente cria produtos para códigos que não existem na base.
-    """
+    """Lê um XLSX de ENTRADAS e insere todas as linhas na tabela `entrada`."""
     rows: List[Dict[str, Any]] = load_entradas_from_xlsx(path)
     
-    # Extrai produtos únicos dos dados de entrada para criar automaticamente
-    produtos_para_criar = {}
-    for row in rows:
-        codigo = row.get('codigo')
-        if codigo and codigo not in produtos_para_criar:
-            produtos_para_criar[codigo] = {
-                'codigo': codigo,
-                'nome': f'Produto {codigo}',  # Nome genérico temporário
-                'categoria': 'GERAL',
-                'controle_lotes': 1,  # Assume controle de lotes
-                'controle_validade': 1,  # Assume controle de validade
-                'lote_min': 1,
-                'lote_mult': 1,
-                'quantidade_minima': 0
-            }
+    # Ensure all products exist
+    codigos_unicos = {row.get("codigo") for row in rows if row.get("codigo")}
+    for codigo in codigos_unicos:
+        _ensure_product_exists(codigo, db_path)
     
-    # Cria produtos se necessário
-    if produtos_para_criar:
-        produto_repo = ProdutoRepo(db_path)
-        produto_repo.upsert(produtos_para_criar.values())
-        print(f">> {len(produtos_para_criar)} produtos criados/atualizados automaticamente")
-    
-    # Insere entradas
     repo = EntradaRepo(db_path)
     repo.insert_many(rows)
-    return {
-        "arquivo": path, 
-        "linhas_inseridas": len(rows),
-        "produtos_criados": len(produtos_para_criar)
-    }
+    return {"arquivo": path, "linhas_inseridas": len(rows)}
