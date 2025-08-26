@@ -27,7 +27,7 @@ from rich import box
 from estoque.config import DB_PATH, DEFAULTS
 from estoque.infra.migrations import apply_migrations
 from estoque.infra.views import create_views
-from estoque.infra.repositories import ParamsRepo
+from estoque.infra.repositories import ParamsRepo, EntradaRepo, SaidaRepo
 from estoque.usecases.verificar_estoque import run_verificar
 from estoque.usecases.registrar_entrada import run_entrada_unica, run_entrada_lote
 from estoque.usecases.registrar_saida import run_saida_unica, run_saida_lote
@@ -316,7 +316,7 @@ def cmd_params_show(
         },
         "_db": db_path,
     }
-    _display_table(out, title="Parâmetros do Sistema")
+    _print_json(out)
 
 
 # -----------------------
@@ -430,6 +430,66 @@ def cmd_tui():
     except KeyboardInterrupt:
         typer.echo("\n👋 Saindo do TUI...")
         raise typer.Exit(0)
+
+
+# -----------------------
+# comandos de consulta/listagem
+# -----------------------
+
+consultar_app = typer.Typer(help="Consultar e visualizar dados de entradas e saídas")
+app.add_typer(consultar_app, name="consultar")
+
+
+@consultar_app.command("entradas")
+def consultar_entradas(
+    codigo: Optional[str] = typer.Option(None, help="Filtrar por código do produto"),
+    data_inicio: Optional[str] = typer.Option(None, help="Data início (YYYY-MM-DD)"),
+    data_fim: Optional[str] = typer.Option(None, help="Data fim (YYYY-MM-DD)"),
+    limite: int = typer.Option(50, help="Número máximo de registros (padrão: 50)"),
+    db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite"),
+):
+    """Lista entradas cadastradas no sistema."""
+    repo = EntradaRepo(db_path)
+    
+    entradas = repo.fetch_by_filters(
+        codigo=codigo,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        limit=limite
+    )
+    
+    if not entradas:
+        console.print(Panel("Nenhuma entrada encontrada com os filtros especificados", 
+                          title="Entradas", border_style="yellow"))
+        return
+    
+    _display_table(entradas, title=f"Entradas ({len(entradas)} registros)")
+
+
+@consultar_app.command("saidas")
+def consultar_saidas(
+    codigo: Optional[str] = typer.Option(None, help="Filtrar por código do produto"),
+    data_inicio: Optional[str] = typer.Option(None, help="Data início (YYYY-MM-DD)"),
+    data_fim: Optional[str] = typer.Option(None, help="Data fim (YYYY-MM-DD)"),
+    limite: int = typer.Option(50, help="Número máximo de registros (padrão: 50)"),
+    db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite"),
+):
+    """Lista saídas cadastradas no sistema."""
+    repo = SaidaRepo(db_path)
+    
+    saidas = repo.fetch_by_filters(
+        codigo=codigo,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        limit=limite
+    )
+    
+    if not saidas:
+        console.print(Panel("Nenhuma saída encontrada com os filtros especificados", 
+                          title="Saídas", border_style="yellow"))
+        return
+    
+    _display_table(saidas, title=f"Saídas ({len(saidas)} registros)")
 
 
 # Entry point opcional:
