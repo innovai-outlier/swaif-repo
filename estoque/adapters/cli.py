@@ -34,8 +34,18 @@ from estoque.usecases.relatorios import (
 )
 
 
-
 app = typer.Typer(help="Estoque Clínica — CLI")
+
+
+# -----------------------
+# TUI command
+# -----------------------
+
+@app.command("tui")
+def cmd_tui():
+    """Inicia a interface terminal interativa (TUI)."""
+    from estoque.adapters.tui import main_tui
+    main_tui()
 
 
 # -----------------------
