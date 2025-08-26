@@ -15,9 +15,14 @@ Comandos principais:
 from __future__ import annotations
 
 import json
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 
 import typer
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import box
 
 from estoque.config import DB_PATH, DEFAULTS
 from estoque.infra.migrations import apply_migrations
@@ -35,6 +40,7 @@ from estoque.usecases.relatorios import (
 
 
 app = typer.Typer(help="Estoque Clínica — CLI")
+console = Console()
 
 
 # -----------------------
@@ -53,7 +59,191 @@ def cmd_tui():
 # -----------------------
 
 def _print_json(obj) -> None:
+    """Fallback para impressão de JSON quando necessário."""
     typer.echo(json.dumps(obj, ensure_ascii=False, indent=2))
+
+
+def _display_table(data: Dict[str, Any] | List[Dict[str, Any]], title: str = "Resultado") -> None:
+    """Exibe os dados em tabelas formatadas usando Rich."""
+    if not data:
+        console.print(Panel("Nenhum dado encontrado", title=title, border_style="yellow"))
+        return
+
+    # Lista de itens - formato mais comum nos relatórios
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        table = Table(title=title, box=box.ROUNDED)
+        
+        # Determinar colunas com base nas chaves do primeiro item
+        columns = data[0].keys()
+        for column in columns:
+            # Estilizar colunas específicas
+            if column.lower() in ['quantidade', 'estoque', 'demanda', 'valor']:
+                table.add_column(column, justify="right")
+            elif column.lower() in ['data', 'vencimento']:
+                table.add_column(column, justify="center")
+            else:
+                table.add_column(column)
+        
+        # Adicionar linhas
+        for row in data:
+            values = []
+            for col in columns:
+                val = row.get(col, "")
+                # Formatar valores específicos
+                if isinstance(val, (int, float)) and not isinstance(val, bool):
+                    values.append(f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                elif isinstance(val, datetime):
+                    values.append(val.strftime("%d/%m/%Y"))
+                else:
+                    values.append(str(val))
+            table.add_row(*values)
+        
+        console.print(table)
+        return
+
+    # Caso específico para o relatório de verificação
+    if isinstance(data, dict) and "produtos" in data and isinstance(data["produtos"], list):
+        # Tabela para produtos
+        produtos_table = Table(title="Produtos no Estoque", box=box.ROUNDED)
+        
+        if data["produtos"]:
+            # Colunas para produtos
+            produtos_cols = ["cod", "nome", "estoque", "demanda_dia", "ss", "rop", "status"]
+            for col in produtos_cols:
+                if col in ["estoque", "demanda_dia", "ss", "rop"]:
+                    produtos_table.add_column(col, justify="right")
+                else:
+                    produtos_table.add_column(col)
+            
+            for prod in data["produtos"]:
+                valores = []
+                for col in produtos_cols:
+                    val = prod.get(col, "")
+                    if col == "status":
+                        # Colorir status
+                        status_val = str(val)
+                        if "crítico" in status_val.lower():
+                            valores.append(f"[bold red]{status_val}[/]")
+                        elif "alerta" in status_val.lower():
+                            valores.append(f"[bold yellow]{status_val}[/]")
+                        elif "normal" in status_val.lower():
+                            valores.append(f"[bold green]{status_val}[/]")
+                        else:
+                            valores.append(status_val)
+                    elif isinstance(val, (int, float)) and not isinstance(val, bool):
+                        valores.append(f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    else:
+                        valores.append(str(val))
+                produtos_table.add_row(*valores)
+            
+            console.print(produtos_table)
+        
+        # Informações adicionais
+        if "sugestoes" in data and data["sugestoes"]:
+            sugestoes_table = Table(title="Sugestões de Compra", box=box.ROUNDED)
+            sugestoes_cols = ["cod", "nome", "qtd_sugerida", "motivo"]
+            for col in sugestoes_cols:
+                if col == "qtd_sugerida":
+                    sugestoes_table.add_column(col, justify="right")
+                else:
+                    sugestoes_table.add_column(col)
+            
+            for sug in data["sugestoes"]:
+                valores = []
+                for col in sugestoes_cols:
+                    val = sug.get(col, "")
+                    if col == "qtd_sugerida" and isinstance(val, (int, float)):
+                        valores.append(f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    else:
+                        valores.append(str(val))
+                sugestoes_table.add_row(*valores)
+            
+            console.print(sugestoes_table)
+        
+        # Metadados
+        if "timestamp" in data:
+            console.print(f"[dim]Verificação executada em: {data['timestamp']}[/dim]")
+        
+        return
+
+    # Dados de entrada/saída única
+    if isinstance(data, dict) and any(k in data for k in ["entrada_id", "saida_id"]):
+        movimento_tipo = "Entrada" if "entrada_id" in data else "Saída"
+        table = Table(title=f"{movimento_tipo} Registrada", box=box.ROUNDED)
+        
+        # Colunas base
+        table.add_column("Campo")
+        table.add_column("Valor")
+        
+        # Linhas específicas para movimentos
+        for chave, valor in data.items():
+            if chave in ["entrada_id", "saida_id"]:
+                table.add_row("ID", str(valor))
+            elif chave == "data":
+                table.add_row("Data", valor)
+            elif chave == "produto":
+                table.add_row("Produto", f"{valor.get('cod', '')} - {valor.get('nome', '')}")
+            elif chave == "quantidade":
+                table.add_row("Quantidade", f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            elif chave == "vencimento" and valor:
+                table.add_row("Vencimento", valor)
+            elif chave == "lote" and valor:
+                table.add_row("Lote", valor)
+            elif chave == "notas" and valor:
+                table.add_row("Notas", valor)
+        
+        console.print(table)
+        return
+    
+    # Operações em lote
+    if isinstance(data, dict) and "registros" in data and "total" in data:
+        titulo = "Registros em Lote"
+        if "tipo" in data:
+            titulo = f"{data['tipo']} em Lote"
+        
+        panel_content = [
+            f"Total de registros: {data['total']}",
+            f"Processados com sucesso: {data.get('sucessos', 0)}",
+        ]
+        
+        if "erros" in data and data["erros"]:
+            panel_content.append(f"Erros: {len(data['erros'])}")
+            
+        console.print(Panel("\n".join(panel_content), title=titulo))
+        
+        if "erros" in data and data["erros"]:
+            erro_table = Table(title="Erros Encontrados")
+            erro_table.add_column("Linha")
+            erro_table.add_column("Erro")
+            
+            for erro in data["erros"]:
+                erro_table.add_row(str(erro.get("linha", "?")), erro.get("mensagem", "Erro desconhecido"))
+            
+            console.print(erro_table)
+        
+        return
+    
+    # Parâmetros
+    if isinstance(data, dict) and "_defaults" in data:
+        params_table = Table(title="Parâmetros do Sistema")
+        params_table.add_column("Parâmetro")
+        params_table.add_column("Valor Atual")
+        params_table.add_column("Valor Padrão")
+        
+        for param in ["nivel_servico", "mu_t_dias_uteis", "sigma_t_dias_uteis"]:
+            if param in data:
+                params_table.add_row(
+                    param, 
+                    str(data[param]), 
+                    str(data["_defaults"][param])
+                )
+        
+        console.print(params_table)
+        console.print(f"[dim]Banco de dados: {data.get('_db', 'N/A')}[/dim]")
+        return
+    
+    # Fallback para outros formatos de dados - usar JSON
+    _print_json(data)
 
 
 # -----------------------
@@ -126,7 +316,7 @@ def cmd_params_show(
         },
         "_db": db_path,
     }
-    _print_json(out)
+    _display_table(out, title="Parâmetros do Sistema")
 
 
 # -----------------------
@@ -137,10 +327,10 @@ def cmd_params_show(
 def cmd_verificar(db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite")):
     """
     Executa o cálculo completo: rebuild de demanda, métricas, SS/ROP e sugestões.
-    Saída em JSON.
+    Saída em tabelas formatadas.
     """
     res = run_verificar(db_path=db_path)
-    _print_json(res)
+    _display_table(res, title="Verificação de Estoque")
 
 
 # -----------------------
@@ -151,7 +341,7 @@ def cmd_verificar(db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do 
 def cmd_entrada_unica(db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite")):
     """Registra uma entrada única via prompts no terminal."""
     rec = run_entrada_unica(db_path=db_path)
-    _print_json(rec)
+    _display_table(rec, title="Entrada Registrada")
 
 
 @app.command("entrada-lotes")
@@ -161,14 +351,14 @@ def cmd_entrada_lotes(
 ):
     """Registra entradas em lote a partir de um XLSX."""
     info = run_entrada_lote(path, db_path=db_path)
-    _print_json(info)
+    _display_table(info, title="Processamento de Entradas em Lote")
 
 
 @app.command("saida-unica")
 def cmd_saida_unica(db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite")):
     """Registra uma saída única via prompts no terminal."""
     rec = run_saida_unica(db_path=db_path)
-    _print_json(rec)
+    _display_table(rec, title="Saída Registrada")
 
 
 @app.command("saida-lotes")
@@ -178,7 +368,8 @@ def cmd_saida_lotes(
 ):
     """Registra saídas em lote a partir de um XLSX."""
     info = run_saida_lote(path, db_path=db_path)
-    _print_json(info)
+    _display_table(info, title="Processamento de Saídas em Lote")
+
 
 rel_app = typer.Typer(help="Relatórios de estoque")
 app.add_typer(rel_app, name="rel")
@@ -188,8 +379,9 @@ def rel_ruptura(
     horizonte_dias: int = typer.Option(7, help="Dias de cobertura máxima para alerta"),
     db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite"),
 ):
+    """Gera relatório de produtos com risco de ruptura."""
     res = relatorio_alerta_ruptura(horizonte_dias=horizonte_dias, db_path=db_path)
-    _print_json(res)
+    _display_table(res, title=f"Alerta de Ruptura (Horizonte: {horizonte_dias} dias)")
 
 @rel_app.command("vencimentos")
 def rel_vencimentos(
@@ -197,8 +389,9 @@ def rel_vencimentos(
     detalhar_por_lote: bool = typer.Option(True, help="True=detalhe por lote; False=agregado por produto"),
     db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite"),
 ):
+    """Gera relatório de produtos próximos ao vencimento."""
     res = relatorio_produtos_a_vencer(janela_dias=janela_dias, detalhar_por_lote=detalhar_por_lote, db_path=db_path)
-    _print_json(res)
+    _display_table(res, title=f"Produtos a Vencer (Próximos {janela_dias} dias)")
 
 @rel_app.command("top-consumo")
 def rel_top_consumo(
@@ -207,15 +400,17 @@ def rel_top_consumo(
     top_n: int = typer.Option(20, help="Top N produtos"),
     db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite"),
 ):
+    """Gera relatório dos produtos mais consumidos no período."""
     res = relatorio_mais_consumidos(inicio_ano_mes=inicio_ano_mes, fim_ano_mes=fim_ano_mes, top_n=top_n, db_path=db_path)
-    _print_json(res)
+    _display_table(res, title=f"Top {top_n} Produtos Mais Consumidos ({inicio_ano_mes} a {fim_ano_mes})")
 
 @rel_app.command("reposicao")
 def rel_reposicao_cmd(
     db_path: str = typer.Option(DB_PATH, "--db", help="Caminho do SQLite"),
 ):
+    """Gera relatório de sugestões de reposição de estoque."""
     res = relatorio_reposicao(db_path=db_path)
-    _print_json(res)
+    _display_table(res, title="Relatório de Reposição de Estoque")
     
 @app.command("tui")
 def cmd_tui():
