@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 from estoque.config import DB_PATH
-from estoque.infra.repositories import EntradaRepo
+from estoque.infra.repositories import EntradaRepo, ProdutoRepo
 from estoque.adapters.gds_loader import load_entradas_from_xlsx
 
 # Pequenos utilitários locais (repetidos aqui para evitar imports de privados)
@@ -74,8 +74,39 @@ def run_entrada_unica(db_path: str = DB_PATH) -> Dict[str, Any]:
 
 
 def run_entrada_lote(path: str, db_path: str = DB_PATH) -> Dict[str, Any]:
-    """Lê um XLSX de ENTRADAS e insere todas as linhas na tabela `entrada`."""
+    """Lê um XLSX de ENTRADAS e insere todas as linhas na tabela `entrada`.
+    
+    Automaticamente cria produtos para códigos que não existem na base.
+    """
     rows: List[Dict[str, Any]] = load_entradas_from_xlsx(path)
+    
+    # Extrai produtos únicos dos dados de entrada para criar automaticamente
+    produtos_para_criar = {}
+    for row in rows:
+        codigo = row.get('codigo')
+        if codigo and codigo not in produtos_para_criar:
+            produtos_para_criar[codigo] = {
+                'codigo': codigo,
+                'nome': f'Produto {codigo}',  # Nome genérico temporário
+                'categoria': 'GERAL',
+                'controle_lotes': 1,  # Assume controle de lotes
+                'controle_validade': 1,  # Assume controle de validade
+                'lote_min': 1,
+                'lote_mult': 1,
+                'quantidade_minima': 0
+            }
+    
+    # Cria produtos se necessário
+    if produtos_para_criar:
+        produto_repo = ProdutoRepo(db_path)
+        produto_repo.upsert(produtos_para_criar.values())
+        print(f">> {len(produtos_para_criar)} produtos criados/atualizados automaticamente")
+    
+    # Insere entradas
     repo = EntradaRepo(db_path)
     repo.insert_many(rows)
-    return {"arquivo": path, "linhas_inseridas": len(rows)}
+    return {
+        "arquivo": path, 
+        "linhas_inseridas": len(rows),
+        "produtos_criados": len(produtos_para_criar)
+    }

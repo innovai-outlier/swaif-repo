@@ -10,22 +10,16 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict
 from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import (
     Button, Header, Footer, Static, Tree, Input, TextArea, Label,
-    Select, Checkbox, ProgressBar, Log, Markdown
+    Checkbox
 )
 from textual.screen import ModalScreen, Screen
-from textual.binding import Binding
-from rich.text import Text
-from rich.console import Console
-from rich import box
-from rich.panel import Panel
-from rich.table import Table
 
 from estoque.config import DB_PATH
 
@@ -519,7 +513,7 @@ Bem-vindo ao Sistema de Gestão de Estoque!
             else:
                 cmd = "make params-set"
             
-            self.notify(f"🔄 Configurando parâmetros...", timeout=3)
+            self.notify("🔄 Configurando parâmetros...", timeout=3)
             
             result = subprocess.run(
                 cmd.split(),
@@ -552,7 +546,6 @@ Bem-vindo ao Sistema de Gestão de Estoque!
     def on_file_input_result(self, result: Optional[Dict[str, str]]) -> None:
         """Handle file input form result."""
         if result and "file" in result:
-            file_path = result["file"]
             # We need to determine which operation this was for
             # For now, we'll handle it in the action context
             pass

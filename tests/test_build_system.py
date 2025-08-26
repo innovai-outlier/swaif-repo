@@ -3,10 +3,8 @@ Tests for the build system (Makefile split and Windows batch equivalent).
 """
 
 import pytest
-import os
 import subprocess
 from pathlib import Path
-from unittest.mock import patch, Mock
 
 
 class TestBuildSystemStructure:
