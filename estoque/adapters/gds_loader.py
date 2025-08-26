@@ -39,9 +39,17 @@ def _slug(s: str) -> str:
     return s
 
 
+def _safe_get(row, key):
+    """Safely gets a value from pandas row, handling NA values."""
+    val = row.get(key)
+    if pd.isna(val) or val is None:
+        return None
+    return val
+
+
 def _first_nonnull(*vals):
     for v in vals:
-        if v is not None:
+        if v is not None and not pd.isna(v):
             return v
     return None
 
@@ -187,18 +195,18 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
 
     out: List[Dict[str, Any]] = []
     for _, row in df.iterrows():
-        data_entrada = _first_nonnull(row.get("data_entrada"), row.get("data"))
+        data_entrada = _first_nonnull(_safe_get(row, "data_entrada"), _safe_get(row, "data"))
         rec = {
             "data_entrada": _to_date_iso(data_entrada),
-            "codigo": (row.get("codigo") or None),
-            "quantidade_raw": (row.get("quantidade_raw") or None),
-            "lote": (row.get("lote") or None),
-            "data_validade": _to_date_iso(row.get("data_validade")),
-            "valor_unitario": (row.get("valor_unitario") or None),
-            "nota_fiscal": (row.get("nota_fiscal") or None),
-            "representante": (row.get("representante") or None),
-            "responsavel": (row.get("responsavel") or None),
-            "pago": _to_bool01(row.get("pago")),
+            "codigo": _safe_get(row, "codigo"),
+            "quantidade_raw": _safe_get(row, "quantidade_raw"),
+            "lote": _safe_get(row, "lote"),
+            "data_validade": _to_date_iso(_safe_get(row, "data_validade")),
+            "valor_unitario": _safe_get(row, "valor_unitario"),
+            "nota_fiscal": _safe_get(row, "nota_fiscal"),
+            "representante": _safe_get(row, "representante"),
+            "responsavel": _safe_get(row, "responsavel"),
+            "pago": _to_bool01(_safe_get(row, "pago")),
         }
         out.append(rec)
     return out
@@ -224,17 +232,17 @@ def load_saidas_from_xlsx(path: str) -> List[Dict[str, Any]]:
 
     out: List[Dict[str, Any]] = []
     for _, row in df.iterrows():
-        data_saida = _first_nonnull(row.get("data_saida"), row.get("data"))
+        data_saida = _first_nonnull(_safe_get(row, "data_saida"), _safe_get(row, "data"))
         rec = {
             "data_saida": _to_date_iso(data_saida),
-            "codigo": (row.get("codigo") or None),
-            "quantidade_raw": (row.get("quantidade_raw") or None),
-            "lote": (row.get("lote") or None),
-            "data_validade": _to_date_iso(row.get("data_validade")),
-            "custo": (row.get("custo") or None),
-            "paciente": (row.get("paciente") or None),
-            "responsavel": (row.get("responsavel") or None),
-            "descarte_flag": _to_bool01(row.get("descarte_flag")),
+            "codigo": _safe_get(row, "codigo"),
+            "quantidade_raw": _safe_get(row, "quantidade_raw"),
+            "lote": _safe_get(row, "lote"),
+            "data_validade": _to_date_iso(_safe_get(row, "data_validade")),
+            "custo": _safe_get(row, "custo"),
+            "paciente": _safe_get(row, "paciente"),
+            "responsavel": _safe_get(row, "responsavel"),
+            "descarte_flag": _to_bool01(_safe_get(row, "descarte_flag")),
         }
         out.append(rec)
     return out
