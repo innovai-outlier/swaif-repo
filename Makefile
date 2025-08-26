@@ -21,7 +21,7 @@ help:
 	@echo "  build.bat <target>              -> usa build.bat"
 	@echo ""
 	@echo "Exemplos de comandos disponíveis:"
-	@echo "  venv, install, migrate, test, lint, doctor, ci, clean"
+	@echo "  venv, install, migrate, verificar, tui, test, lint, doctor, ci, clean"
 	@echo ""
 	@echo "Para ver todos os comandos específicos da sua plataforma:"
 	@echo "  Linux/Unix: make -f Makefile.unix help"
@@ -30,7 +30,7 @@ help:
 # ====== ATALHOS PARA LINUX/UNIX ======
 .PHONY: venv install install-min migrate verificar params-show params-set
 .PHONY: entrada-lotes saida-lotes rel-ruptura rel-vencimentos rel-top rel-reposicao
-.PHONY: test lint lock relock lock-verify doctor ci clean distclean
+.PHONY: tui mainframe test lint lock relock lock-verify doctor ci clean distclean
 
 venv install install-min migrate verificar params-show params-set:
 	@$(MAKE) -f Makefile.unix $@
@@ -38,5 +38,5 @@ venv install install-min migrate verificar params-show params-set:
 entrada-lotes saida-lotes rel-ruptura rel-vencimentos rel-top rel-reposicao:
 	@$(MAKE) -f Makefile.unix $@
 
-test lint lock relock lock-verify doctor ci clean distclean:
+tui mainframe test lint lock relock lock-verify doctor ci clean distclean:
 	@$(MAKE) -f Makefile.unix $@
