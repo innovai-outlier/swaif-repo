@@ -56,7 +56,14 @@ def _first_nonnull(*vals):
 
 def _to_bool01(val: Any) -> Optional[int]:
     """Converte valores variados em 0/1 (ou None)."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
+    if val is None:
+        return None
+    # Check for pandas NA
+    if hasattr(pd, 'isna') and pd.isna(val):
+        return None
+    if isinstance(val, float) and pd.isna(val):
+        return None
+    if hasattr(val, '__class__') and 'NAType' in str(type(val)):
         return None
     s = str(val).strip().lower()
     if s in {"1", "true", "t", "sim", "s", "y", "yes"}:
@@ -75,7 +82,14 @@ def _to_bool01(val: Any) -> Optional[int]:
 
 def _to_date_iso(val: Any) -> Optional[str]:
     """Converte valor para data ISO (YYYY-MM-DD) se possível."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
+    if val is None:
+        return None
+    # Check for pandas NA
+    if hasattr(pd, 'isna') and pd.isna(val):
+        return None
+    if isinstance(val, float) and pd.isna(val):
+        return None
+    if hasattr(val, '__class__') and 'NAType' in str(type(val)):
         return None
     # pandas já pode vir como Timestamp
     if isinstance(val, (pd.Timestamp, )):
@@ -192,7 +206,6 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
     df = pd.read_excel(path, dtype="string")
     df = _ensure_str_cols(df)
     df = _normalize_columns(df)
-
     out: List[Dict[str, Any]] = []
     for _, row in df.iterrows():
         data_entrada = _first_nonnull(_safe_get(row, "data_entrada"), _safe_get(row, "data"))
@@ -229,7 +242,6 @@ def load_saidas_from_xlsx(path: str) -> List[Dict[str, Any]]:
     df = pd.read_excel(path, dtype="string")
     df = _ensure_str_cols(df)
     df = _normalize_columns(df)
-
     out: List[Dict[str, Any]] = []
     for _, row in df.iterrows():
         data_saida = _first_nonnull(_safe_get(row, "data_saida"), _safe_get(row, "data"))
