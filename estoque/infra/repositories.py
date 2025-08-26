@@ -274,6 +274,63 @@ class EntradaRepo:
                 rows,
             )
 
+    def fetch_all(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Busca todas as entradas, ordenadas por data (mais recentes primeiro)."""
+        with connect(self.db_path) as c:
+            sql = """
+                SELECT id, data_entrada, codigo, quantidade_raw, lote, data_validade,
+                       valor_unitario, nota_fiscal, representante, responsavel, pago
+                FROM entrada
+                ORDER BY data_entrada DESC, id DESC
+            """
+            if limit:
+                sql += f" LIMIT {limit}"
+            
+            cur = c.execute(sql)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+    def fetch_by_filters(self, 
+                        codigo: Optional[str] = None,
+                        data_inicio: Optional[str] = None,
+                        data_fim: Optional[str] = None,
+                        limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Busca entradas com filtros opcionais."""
+        conditions = []
+        params = {}
+        
+        if codigo:
+            conditions.append("codigo = :codigo")
+            params["codigo"] = codigo
+            
+        if data_inicio:
+            conditions.append("data_entrada >= :data_inicio")
+            params["data_inicio"] = data_inicio
+            
+        if data_fim:
+            conditions.append("data_entrada <= :data_fim")
+            params["data_fim"] = data_fim
+        
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+        
+        sql = f"""
+            SELECT id, data_entrada, codigo, quantidade_raw, lote, data_validade,
+                   valor_unitario, nota_fiscal, representante, responsavel, pago
+            FROM entrada
+            {where_clause}
+            ORDER BY data_entrada DESC, id DESC
+        """
+        
+        if limit:
+            sql += f" LIMIT {limit}"
+            
+        with connect(self.db_path) as c:
+            cur = c.execute(sql, params)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+
 
 class SaidaRepo:
     def __init__(self, db_path: str):
@@ -310,6 +367,63 @@ class SaidaRepo:
                 """,
                 rows,
             )
+
+    def fetch_all(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Busca todas as saídas, ordenadas por data (mais recentes primeiro)."""
+        with connect(self.db_path) as c:
+            sql = """
+                SELECT id, data_saida, codigo, quantidade_raw, lote, data_validade,
+                       custo, paciente, responsavel, descarte_flag
+                FROM saida
+                ORDER BY data_saida DESC, id DESC
+            """
+            if limit:
+                sql += f" LIMIT {limit}"
+            
+            cur = c.execute(sql)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+    def fetch_by_filters(self, 
+                        codigo: Optional[str] = None,
+                        data_inicio: Optional[str] = None,
+                        data_fim: Optional[str] = None,
+                        limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Busca saídas com filtros opcionais."""
+        conditions = []
+        params = {}
+        
+        if codigo:
+            conditions.append("codigo = :codigo")
+            params["codigo"] = codigo
+            
+        if data_inicio:
+            conditions.append("data_saida >= :data_inicio")
+            params["data_inicio"] = data_inicio
+            
+        if data_fim:
+            conditions.append("data_saida <= :data_fim")
+            params["data_fim"] = data_fim
+        
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+        
+        sql = f"""
+            SELECT id, data_saida, codigo, quantidade_raw, lote, data_validade,
+                   custo, paciente, responsavel, descarte_flag
+            FROM saida
+            {where_clause}
+            ORDER BY data_saida DESC, id DESC
+        """
+        
+        if limit:
+            sql += f" LIMIT {limit}"
+            
+        with connect(self.db_path) as c:
+            cur = c.execute(sql, params)
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
 # -------------------------
