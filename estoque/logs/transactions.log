@@ -1,0 +1,7 @@
+2025-08-28 15:02:23 - estoque.transactions - INFO - TRANSACTION_SUCCESS: entrada_lote - Result: {'arquivo': 'saidas.xlsx', 'linhas_inseridas': 906} - Data: {'file': 'saidas.xlsx', 'rows_count': 906}
+2025-08-28 17:51:14 - estoque.transactions - INFO - TRANSACTION_SUCCESS: entrada_lote - Result: {'arquivo': 'entradas.xlsx', 'linhas_inseridas': 203} - Data: {'file': 'entradas.xlsx', 'rows_count': 203}
+2025-08-28 17:51:38 - estoque.transactions - INFO - TRANSACTION_SUCCESS: saida_lote - Result: {'arquivo': 'saidas.xlsx', 'linhas_inseridas': 906} - Data: {'file': 'saidas.xlsx', 'rows_count': 906}
+2025-08-28 17:56:58 - estoque.transactions - INFO - TRANSACTION_SUCCESS: entrada_lote - Result: {'arquivo': 'entradas.xlsx', 'linhas_inseridas': 203} - Data: {'file': 'entradas.xlsx', 'rows_count': 203}
+2025-08-28 18:03:30 - estoque.transactions - ERROR - TRANSACTION_FAILED: saida_unica - [Errno 5] Input/output error - Data: {'codigo': 'unknown'}
+2025-08-28 18:04:11 - estoque.transactions - INFO - TRANSACTION_SUCCESS: saida_lote - Result: {'arquivo': 'saidas.xlsx', 'linhas_inseridas': 906} - Data: {'file': 'saidas.xlsx', 'rows_count': 906}
+2025-08-28 19:33:37 - estoque.transactions - INFO - TRANSACTION_SUCCESS: entrada_lote - Result: {'arquivo': 'entradas.xlsx', 'linhas_inseridas': 203} - Data: {'file': 'entradas.xlsx', 'rows_count': 203}

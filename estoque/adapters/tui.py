@@ -24,6 +24,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 from rich.layout import Layout
 from rich.text import Text
 from rich.align import Align
+import logging
 
 from estoque.config import DB_PATH, DEFAULTS
 from estoque.infra.migrations import apply_migrations
@@ -40,6 +41,13 @@ from estoque.usecases.relatorios import (
 )
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    filename="estoque_tui.log",
+    filemode="a"
+)
+
 class EstoqueTUI:
     """Text User Interface para o sistema de estoque."""
     
@@ -50,28 +58,37 @@ class EstoqueTUI:
     def run(self) -> None:
         """Inicia a interface principal."""
         self.show_banner()
-        
+        logging.info("TUI iniciada.")
         while True:
             try:
                 choice = self.show_main_menu()
+                logging.info(f"Menu principal selecionado: opção {choice}")
                 if choice == "1":
+                    logging.info("Acessando menu_movimentacao")
                     self.menu_movimentacao()
                 elif choice == "2":
+                    logging.info("Acessando menu_banco_dados")
                     self.menu_banco_dados()
                 elif choice == "3":
+                    logging.info("Acessando menu_relatorios")
                     self.menu_relatorios()
                 elif choice == "4":
+                    logging.info("Acessando menu_sistema")
                     self.menu_sistema()
                 elif choice == "0":
-                    self.console.print("\n[green]Saindo do sistema...[/green]")
+                    logging.info("Saindo do sistema pela opção 0.")
+                    self.console.print("\n[green]Saindo do sistema...[\/green]")
                     break
                 else:
-                    self.console.print("[red]Opção inválida![/red]")
+                    logging.warning(f"Opção inválida no menu principal: {choice}")
+                    self.console.print("[red]Opção inválida![\/red]")
             except KeyboardInterrupt:
-                self.console.print("\n[red]Saindo...[/red]")
+                logging.info("Saída por KeyboardInterrupt.")
+                self.console.print("\n[red]Saindo...[\/red]")
                 break
             except Exception as e:
-                self.console.print(f"[red]Erro: {e}[/red]")
+                logging.error(f"Erro na TUI: {e}")
+                self.console.print(f"[red]Erro: {e}[\/red]")
     
     def show_banner(self) -> None:
         """Exibe banner do sistema."""
@@ -114,16 +131,21 @@ class EstoqueTUI:
             )
             self.console.print(menu)
             choice = Prompt.ask("Escolha uma opção", choices=["0", "1", "2", "3", "4"])
-            
+            logging.info(f"Menu movimentação selecionado: opção {choice}")
             if choice == "0":
+                logging.info("Retornando do menu_movimentacao")
                 break
             elif choice == "1":
+                logging.info("Selecionado carregar_entradas")
                 self.carregar_entradas()
             elif choice == "2":
+                logging.info("Selecionado carregar_saidas")
                 self.carregar_saidas()
             elif choice == "3":
+                logging.info("Selecionado entrada_manual")
                 self.entrada_manual()
             elif choice == "4":
+                logging.info("Selecionado saida_manual")
                 self.saida_manual()
     
     def menu_banco_dados(self) -> None:
@@ -142,18 +164,24 @@ class EstoqueTUI:
             )
             self.console.print(menu)
             choice = Prompt.ask("Escolha uma opção", choices=["0", "1", "2", "3", "4", "5"])
-            
+            logging.info(f"Menu banco de dados selecionado: opção {choice}")
             if choice == "0":
+                logging.info("Retornando do menu_banco_dados")
                 break
             elif choice == "1":
+                logging.info("Selecionado mostrar_produtos")
                 self.mostrar_produtos()
             elif choice == "2":
+                logging.info("Selecionado mostrar_entradas")
                 self.mostrar_entradas()
             elif choice == "3":
+                logging.info("Selecionado mostrar_saidas")
                 self.mostrar_saidas()
             elif choice == "4":
+                logging.info("Selecionado mostrar_estoque_atual")
                 self.mostrar_estoque_atual()
             elif choice == "5":
+                logging.info("Selecionado mostrar_lotes")
                 self.mostrar_lotes()
     
     def menu_relatorios(self) -> None:
@@ -171,16 +199,21 @@ class EstoqueTUI:
             )
             self.console.print(menu)
             choice = Prompt.ask("Escolha uma opção", choices=["0", "1", "2", "3", "4"])
-            
+            logging.info(f"Menu relatórios selecionado: opção {choice}")
             if choice == "0":
+                logging.info("Retornando do menu_relatorios")
                 break
             elif choice == "1":
+                logging.info("Selecionado relatorio_ruptura")
                 self.relatorio_ruptura()
             elif choice == "2":
+                logging.info("Selecionado relatorio_vencimentos")
                 self.relatorio_vencimentos()
             elif choice == "3":
+                logging.info("Selecionado relatorio_top_consumo")
                 self.relatorio_top_consumo()
             elif choice == "4":
+                logging.info("Selecionado relatorio_reposicao")
                 self.relatorio_reposicao()
     
     def menu_sistema(self) -> None:
@@ -197,14 +230,18 @@ class EstoqueTUI:
             )
             self.console.print(menu)
             choice = Prompt.ask("Escolha uma opção", choices=["0", "1", "2", "3"])
-            
+            logging.info(f"Menu sistema selecionado: opção {choice}")
             if choice == "0":
+                logging.info("Retornando do menu_sistema")
                 break
             elif choice == "1":
+                logging.info("Selecionado aplicar_migracoes")
                 self.aplicar_migracoes()
             elif choice == "2":
+                logging.info("Selecionado verificar_estoque")
                 self.verificar_estoque()
             elif choice == "3":
+                logging.info("Selecionado configurar_parametros")
                 self.configurar_parametros()
     
     def carregar_entradas(self) -> None:

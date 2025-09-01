@@ -1,11 +1,3 @@
-"""
-Fancy Mainframe Terminal UI for the Estoque System.
-
-This module provides an interactive terminal user interface (TUI) that allows
-users to navigate and execute all the system functions through a menu-driven
-interface.
-"""
-
 from __future__ import annotations
 
 import os
@@ -16,13 +8,44 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import (
-    Button, Header, Footer, Static, Tree, Input, TextArea, Label,
+    Button, Header, Footer, Static, Tree, Input, DataTable, Label,
     Checkbox
 )
 from textual.screen import ModalScreen, Screen
 
-from estoque.config import DB_PATH
 
+from estoque.config import DB_PATH
+from estoque.infra.db import connect
+from estoque.infra.logger import LOGS_DIR, ENABLE_OUTPUT, ENABLE_LOGGING, log_system_event, get_log_summary
+from estoque.infra.repositories import ProdutoRepo, EntradaRepo, SaidaRepo, DimConsumoRepo, DemandaRepo, SnapshotRepo
+from estoque.usecases.relatorios import relatorio_reposicao, relatorio_alerta_ruptura, relatorio_produtos_a_vencer, relatorio_mais_consumidos
+from estoque.usecases.registrar_entrada import run_entrada_unica, run_entrada_lote
+from estoque.usecases.registrar_saida import run_saida_unica, run_saida_lote
+
+
+class OutputDataTableScreen(Screen):
+    """Screen to display a DataTable with database/query results."""
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Back"),
+        ("q", "app.pop_screen", "Back"),
+    ]
+
+    def __init__(self, title: str, columns: list, rows: list) -> None:
+        super().__init__()
+        self.title = title
+        self.columns = columns
+        self.rows = rows
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with ScrollableContainer():
+            yield Static(f"📋 {self.title}", classes="output-title")
+            dt = DataTable(zebra_stripes=True)
+            dt.add_columns(*self.columns)
+            for row in self.rows:
+                dt.add_row(*[str(cell) if cell is not None else "" for cell in row])
+            yield dt
+        yield Footer()
 
 class StatusDisplay(Static):
     """Display current system status."""
@@ -55,6 +78,17 @@ class StatusDisplay(Static):
         python_exe = Path(".venv/bin/python" if venv_path.exists() else "python")
         status_info.append(f"🐍 Python: {python_exe}")
         
+        # Logging & Printing
+        if ENABLE_LOGGING:
+            status_info.append("✅ Logging: Ativo")
+        else:
+            status_info.append("❌ Logging: Desativado")
+            
+        if ENABLE_OUTPUT:
+            status_info.append("✅ Output: Ativo")
+        else:
+            status_info.append("❌ Output: Desativado")
+
         status_text = "\n".join(status_info)
         self.update(status_text)
 
@@ -67,49 +101,57 @@ class MenuTreeWidget(Tree):
         self.setup_menu_tree()
     
     def setup_menu_tree(self) -> None:
-        """Setup the menu tree structure."""
-        
-        # Environment & Installation
-        env_node = self.root.add("🔧 Ambiente & Instalação", data="env")
-        env_node.add_leaf("🆕 Criar Virtual Environment", data="venv")
-        env_node.add_leaf("📦 Instalar Dependências (Completo)", data="install")
-        env_node.add_leaf("📦 Instalar Dependências (Mínimo)", data="install-min")
-        
-        # Database & Migration
-        db_node = self.root.add("🗃️ Banco de Dados", data="db")
-        db_node.add_leaf("🔄 Executar Migrações", data="migrate")
-        db_node.add_leaf("✅ Verificar Estoque", data="verificar")
-        
-        # Parameters
-        params_node = self.root.add("⚙️ Parâmetros", data="params")
-        params_node.add_leaf("👁️ Exibir Parâmetros", data="params-show")
-        params_node.add_leaf("✏️ Configurar Parâmetros", data="params-set")
-        
-        # Lote Operations
-        lote_node = self.root.add("📋 Movimentação em Lote", data="lote")
-        lote_node.add_leaf("⬇️ Entrada de Lotes", data="entrada-lotes")
-        lote_node.add_leaf("⬆️ Saída de Lotes", data="saida-lotes")
-        
-        # Reports
-        reports_node = self.root.add("📊 Relatórios", data="reports")
+        """Setup the menu tree structure, expandido conforme tui.py."""
+        # Menu principal expandido
+        # Movimentação
+        mov_node = self.root.add("� Movimentação (Entrada/Saída)", data="movimentacao")
+        mov_node.add_leaf("⬇️ Carregar Entradas (XLSX)", data="entrada-lotes")
+        mov_node.add_leaf("⬆️ Carregar Saídas (XLSX)", data="saida-lotes")
+        mov_node.add_leaf("✍️ Entrada Manual", data="entrada-unica")
+        mov_node.add_leaf("✍️ Saída Manual", data="saida-unica")
+
+        # Banco de Dados
+        db_node = self.root.add("🗃️ Banco de Dados", data="database")
+        db_node.add_leaf("� Ver Produtos", data="ver-produtos")
+        db_node.add_leaf("📥 Ver Entradas", data="ver-entradas")
+        db_node.add_leaf("📤 Ver Saídas", data="ver-saidas")
+        db_node.add_leaf("� Ver Estoque Atual", data="ver-estoque-atual")
+        db_node.add_leaf("📑 Ver Lotes", data="ver-lotes")
+    
+        # Relatórios
+        reports_node = self.root.add("� Relatórios", data="reports")
         reports_node.add_leaf("⚠️ Relatório de Ruptura", data="rel-ruptura")
-        reports_node.add_leaf("📅 Relatório de Vencimentos", data="rel-vencimentos")
+        reports_node.add_leaf("📅 Produtos a Vencer", data="rel-vencimentos")
         reports_node.add_leaf("🔝 Top Consumo", data="rel-top")
         reports_node.add_leaf("🔄 Relatório de Reposição", data="rel-reposicao")
-        
-        # Quality & Testing
+
+        # Sistema
+        sys_node = self.root.add("⚙️ Sistema", data="sistema")
+        sys_node.add_leaf("🔄 Aplicar Migrações", data="migrate")
+        sys_node.add_leaf("✅ Verificar Estoque", data="verificar")
+        sys_node.add_leaf("⚙️ Configurar Parâmetros", data="params-set")
+        sys_node.add_leaf("�️ Exibir Parâmetros", data="params-show")
+
+        # Qualidade & Testes
         quality_node = self.root.add("🧪 Qualidade", data="quality")
         quality_node.add_leaf("🧪 Executar Testes", data="test")
         quality_node.add_leaf("🔍 Lint (Verificar Código)", data="lint")
         quality_node.add_leaf("🩺 Doctor (Verificação Completa)", data="doctor")
         quality_node.add_leaf("🚀 CI (Pipeline Completa)", data="ci")
+
+
+        # Limpeza de dados
+        db_clean_node = self.root.add("🗑️ Limpeza de dados", data="db-clean")
+        db_clean_node.add_leaf("🗑️ Limpar Dados Fictícios", data="clean-auto-products")
+        db_clean_node.add_leaf("🗑️ Limpar Todos os Dados", data="clean-all-data")
         
-        # Maintenance
+        # Manutenção
         maintenance_node = self.root.add("🧹 Manutenção", data="maintenance")
-        maintenance_node.add_leaf("🧹 Limpeza de Cache", data="clean")
-        maintenance_node.add_leaf("🗑️ Limpeza Completa", data="distclean")
+        maintenance_node.add_leaf("🧹 Limpeza de cache", data="clean")
+        maintenance_node.add_leaf("🗑️ Remover artefatos gerados", data="distclean")
         maintenance_node.add_leaf("🔒 Lock Dependencies", data="lock")
         maintenance_node.add_leaf("🔄 Relock Dependencies", data="relock")
+        
 
 
 class ParametersForm(ModalScreen):
@@ -186,12 +228,12 @@ class FileInputForm(ModalScreen):
             
             with Vertical():
                 yield Label("Arquivo Excel (.xlsx):")
-                self.file_input = Input(placeholder="exemplo.xlsx", id="file-input")
+                self.file_input = Input(placeholder="entradas.xlsx", id="file-input")
                 yield self.file_input
                 
                 with Horizontal():
-                    yield Button("▶️ Executar", variant="primary", id="execute-btn")
-                    yield Button("❌ Cancelar", id="cancel-btn")
+                    yield Button("Executar", variant="primary", id="execute-btn")
+                    yield Button("Cancelar", id="cancel-btn")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "execute-btn":
@@ -317,12 +359,14 @@ class OutputScreen(Screen):
         
         with ScrollableContainer():
             yield Static(f"📋 {self.title}", classes="output-title")
-            yield TextArea(self.content, read_only=True, show_line_numbers=False)
+            # Usa Static para renderizar ANSI/estilo Rich corretamente
+            yield Static(self.content, markup=False)
         
         yield Footer()
 
 
 class EstoqueMainframeApp(App):
+    
     """Main TUI Application for Estoque System."""
     
     CSS = """
@@ -357,8 +401,8 @@ class EstoqueMainframeApp(App):
     Container#file-input-modal {
         background: #112233;
         border: solid #00aaff;
-        width: 50;
-        height: 12;
+        width: 60;
+        height: 15;
         margin: 2;
     }
     
@@ -366,7 +410,7 @@ class EstoqueMainframeApp(App):
         background: #112233;
         border: solid #00aaff;
         width: 60;
-        height: 18;
+        height: 25;
         margin: 2;
     }
     
@@ -426,7 +470,7 @@ Bem-vindo ao Sistema de Gestão de Estoque!
                 """, classes="info-panel")
         
         yield Footer()
-    
+                
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         """Handle menu tree node selection."""
         if not event.node.data:
@@ -436,46 +480,225 @@ Bem-vindo ao Sistema de Gestão de Estoque!
         self.execute_action(action)
     
     def execute_action(self, action: str) -> None:
-        """Execute the selected action."""
+        """Executa a ação selecionada, agora com relatórios e sistema integrados."""
+        log_system_event("tui_action_start", {"action": action})
+        
         try:
-            if action in ["venv", "install", "install-min", "migrate", "verificar", 
-                         "params-show", "test", "lint", "doctor", "ci", "clean", 
-                         "distclean", "lock", "relock", "rel-reposicao"]:
-                self.run_simple_command(action)
-                
+            # Movimentação
+            if action == "entrada-lotes":
+                self.push_screen(FileInputForm(action, "Carregar Entradas (XLSX)"), self.on_file_input_result)
+            elif action == "saida-lotes":
+                self.push_screen(FileInputForm(action, "Carregar Saídas (XLSX)"), self.on_file_input_result)
+            elif action == "entrada-unica":
+                self.run_manual_entry("entrada")
+            elif action == "saida-unica":
+                self.run_manual_entry("saida")
+
+            # Banco de Dados
+            elif action == "ver-produtos":
+                self.show_db_table("Produtos Cadastrados", "SELECT codigo, nome, categoria, lote_min, quantidade_minima FROM produto ORDER BY codigo", ["Código", "Nome", "Categoria", "Lote Min", "Qtd Min"])
+            elif action == "ver-entradas":
+                self.show_db_table("Entradas Recentes", "SELECT data_entrada, codigo, quantidade_raw, lote, representante FROM entrada ORDER BY id DESC", ["Data", "Código", "Quantidade", "Lote", "Representante"])
+            elif action == "ver-saidas":
+                self.show_db_table("Saídas Recentes", "SELECT data_saida, codigo, quantidade_raw, lote, paciente FROM saida ORDER BY id DESC", ["Data", "Código", "Quantidade", "Lote", "Paciente"])
+            elif action == "ver-estoque-atual":
+                self.show_db_table("Estoque Atual", "SELECT codigo, estoque_total_apres, unidade_apresentacao, estoque_total_unid, unidade_unidade FROM vw_estoque_consolidado ORDER BY codigo", ["Código", "Estoque Apres", "Un. Apres", "Estoque Unid", "Un. Unid"])
+            elif action == "ver-lotes":
+                self.show_db_table("Lotes Detalhados", "SELECT codigo, lote, qtd_apres_num, qtd_apres_un, data_entrada, data_validade FROM vw_lotes_detalhe ORDER BY codigo, lote", ["Código", "Lote", "Qtd Num", "Unidade", "Data Entrada", "Data Validade"])
+
+            # Relatórios
+            elif action == "rel-ruptura":
+                self.push_screen(ReportParametersForm(action), self.on_report_params_result)
+            elif action == "rel-vencimentos":
+                self.push_screen(ReportParametersForm(action), self.on_report_params_result)
+            elif action == "rel-top":
+                self.push_screen(ReportParametersForm(action), self.on_report_params_result)
+            elif action == "rel-reposicao":
+                self.run_report("rel-reposicao")
+
+            # Sistema
+            elif action == "migrate":
+                self.run_simple_command("migrate")
+            elif action == "verificar":
+                self.run_simple_command("verificar")
             elif action == "params-set":
                 self.push_screen(ParametersForm(), self.on_params_result)
+            elif action == "params-show":
+                self.run_simple_command("params-show")
+            elif action == "view-logs":
+                self.show_logs_menu()
+            elif action == "log-summary":
+                self.show_log_summary()
                 
-            elif action in ["entrada-lotes", "saida-lotes"]:
-                title = "Entrada de Lotes" if action == "entrada-lotes" else "Saída de Lotes"
-                self.push_screen(FileInputForm(action, title), self.on_file_input_result)
-                
-            elif action in ["rel-ruptura", "rel-vencimentos", "rel-top"]:
-                self.push_screen(ReportParametersForm(action), self.on_report_params_result)
+            # Limpeza de dados
+            elif action == "clean-auto-products":
+                self.clean_auto_created_products()
+            elif action == "clean-all-data":
+                self.clean_all_data()
+
+            # Qualidade & Testes
+            elif action in ["venv", "install", "install-min", "test", "lint", "doctor", "ci", "clean", "distclean", "lock", "relock"]:
+                self.run_simple_command(action)
                 
         except Exception as e:
             self.notify(f"❌ Erro: {str(e)}", severity="error")
-    
-    def run_simple_command(self, action: str) -> None:
-        """Run a simple command without parameters."""
+
+    def clean_auto_created_products(self) -> None:
+        """Remove produtos fictícios (Auto-created) e registros relacionados do banco de dados."""
+        log_system_event("cleanup_auto_products_start")
+        
         try:
-            # Determine the command to run
-            if os.name == "nt":  # Windows
-                cmd = f"build.bat {action}"
+            with connect(DB_PATH) as c:
+                # Seleciona códigos dos produtos fictícios
+                codigos = [row[0] for row in c.execute("SELECT codigo FROM produto WHERE nome LIKE 'Auto-created%' ").fetchall()]
+                total_prod = len(codigos)
+                total_entradas = total_saidas = total_lotes = 0
+                if codigos:
+                    # Remove entradas
+                    total_entradas = c.execute(f"DELETE FROM entrada WHERE codigo IN ({','.join(['?']*len(codigos))})", codigos).rowcount
+                    # Remove saídas
+                    total_saidas = c.execute(f"DELETE FROM saida WHERE codigo IN ({','.join(['?']*len(codigos))})", codigos).rowcount
+                    # Remove lotes (se existir tabela lote)
+                    try:
+                        total_lotes = c.execute(f"DELETE FROM lote WHERE codigo IN ({','.join(['?']*len(codigos))})", codigos).rowcount
+                    except Exception:
+                        pass
+                    # Remove produtos
+                    deleted = c.execute(f"DELETE FROM produto WHERE codigo IN ({','.join(['?']*len(codigos))})", codigos).rowcount
+                else:
+                    deleted = 0
+                c.commit()
+            msg = (
+                f"Produtos fictícios removidos: {deleted}\n"
+                f"Entradas removidas: {total_entradas}\n"
+                f"Saídas removidas: {total_saidas}\n"
+                f"Lotes removidos: {total_lotes}"
+            )
+            
+            log_system_event("cleanup_auto_products_success", {
+                "products_deleted": deleted,
+                "entries_deleted": total_entradas,
+                "exits_deleted": total_saidas,
+                "lots_deleted": total_lotes
+            })
+            
+            self.push_screen(OutputScreen("Limpeza de Produtos Fictícios", msg))
+            self.notify(f"✅ Limpeza concluída:\n{msg}")
+            
+        except Exception as e:
+            error_msg = str(e)
+            log_system_event("cleanup_auto_products_error", {"error": error_msg}, level="error")
+            self.push_screen(OutputScreen("Erro na Limpeza", error_msg))
+            self.notify(f"❌ Erro ao limpar produtos fictícios: {error_msg}", severity="error")
+
+    # Limpar todas as tabelas
+    def clean_all_data(self) -> None:
+        try:
+            # Limpar todas as tabelas
+            DemandaRepo(DB_PATH).delete_all()
+            EntradaRepo(DB_PATH).delete_all()
+            SaidaRepo(DB_PATH).delete_all()
+            SnapshotRepo(DB_PATH).delete_all()
+            DimConsumoRepo(DB_PATH).delete_all()
+            ProdutoRepo(DB_PATH).delete_all()
+
+            msg = (
+                f"O conteúdo das tabelas foi removido com sucesso.\n"
+            )
+            #self.push_screen(OutputScreen("Limpeza da Base de Dados", msg))
+            self.notify(f"✅ Limpeza da Base de Dados:\n{msg}")
+        except Exception as e:
+            self.notify(f"❌ Erro ao limpar todas as tabelas: {str(e)}", severity="error")
+
+    def run_report(self, report_type: str, params: Dict[str, str]) -> None:
+        try:
+            if report_type == "rel-reposicao":
+                resultado = relatorio_reposicao(DB_PATH)
+                titulo = "Relatório de Reposição"
+                
+            elif report_type == "rel-ruptura":
+                horizonte_dias = 7
+                for key, value in params.items():
+                    if key == "H" and value:
+                        horizonte_dias = int(value)
+                resultado = relatorio_alerta_ruptura(db_path=DB_PATH, horizonte_dias=horizonte_dias)
+                titulo = "Relatório de Ruptura"
+                
+            elif report_type == "rel-vencimentos":
+                janela_dias = 30
+                for key, value in params.items():
+                    if key == "D" and value:
+                        janela_dias = int(value)
+                resultado = relatorio_produtos_a_vencer(db_path=DB_PATH, janela_dias=janela_dias)
+                titulo = "Produtos a Vencer"
+            
+            elif report_type == "rel-top":
+                ini = "2025-01"
+                fim = "2025-06"
+                top_n = 10
+                for key, value in params.items():
+                    if key == "I" and value:
+                        ini = value
+                    elif key == "F" and value:
+                        fim = value
+                    elif key == "N" and value:
+                        top_n = int(value)
+                # Parâmetros podem ser passados via self, mas aqui usa padrão
+                resultado = relatorio_mais_consumidos(inicio_ano_mes=ini, fim_ano_mes=fim, top_n=top_n, db_path=DB_PATH)
+                titulo = "Top Consumo"
             else:
-                cmd = f"make {action}"
+                resultado = None
+                titulo = "Relatório"
+            if resultado:
+                colunas = resultado[0]
+                rows = resultado[1] 
+                self.push_screen(OutputDataTableScreen(titulo, colunas, rows))
+            else:
+                self.push_screen(OutputScreen(titulo, "Nenhum dado encontrado."))
+        except Exception as e:
+            self.notify(f"❌ Erro ao gerar relatório: {str(e)}", severity="error")
+
+    def run_manual_entry(self, tipo: str) -> None:
+        """Executa entrada ou saída manual via prompt."""
+        try:
+            if tipo == "entrada":
+                resultado = run_entrada_unica(DB_PATH)
+                self.push_screen(OutputScreen("Entrada Registrada", str(resultado)))
+            elif tipo == "saida":
+                resultado = run_saida_unica(DB_PATH)
+                self.push_screen(OutputScreen("Saída Registrada", str(resultado)))
+        except Exception as e:
+            self.notify(f"❌ Erro ao registrar {tipo}: {str(e)}", severity="error")
+
+    def show_db_table(self, titulo: str, query: str, colunas: list, limite: int = 20) -> None:
+        try:
+            with connect(DB_PATH) as c:
+                rows = c.execute(query).fetchmany(limite)
+            if not rows:
+                self.push_screen(OutputScreen(titulo, "Nenhum dado encontrado."))
+                return
+            self.push_screen(OutputDataTableScreen(titulo, colunas, rows))
+        except Exception as e:
+            self.notify(f"❌ Erro ao consultar {titulo}: {str(e)}", severity="error")
+
+    def run_simple_command(self, command: str) -> None:
+        """Execute a simple system command via build.bat/make."""
+        try:
+            if os.name == "nt":  # Windows
+                cmd = f"build.bat {command}"
+            else:
+                cmd = f"make {command}"
             
-            self.notify(f"🔄 Executando: {cmd}", timeout=3)
+            self.notify(f"🔄 Executando: {command}", timeout=3)
             
-            # Run the command
             result = subprocess.run(
-                cmd.split(), 
-                capture_output=True, 
-                text=True, 
+                cmd.split(),
+                capture_output=True,
+                text=True,
                 cwd=Path.cwd()
             )
             
-            output = f"Comando: {cmd}\n\n"
+            output = f"Comando: {cmd}\n"
             output += f"Return code: {result.returncode}\n\n"
             
             if result.stdout:
@@ -484,20 +707,20 @@ Bem-vindo ao Sistema de Gestão de Estoque!
             if result.stderr:
                 output += f"STDERR:\n{result.stderr}\n"
             
-            self.push_screen(OutputScreen(f"Resultado: {action}", output))
+            self.push_screen(OutputScreen(f"Execução: {command}", output))
             
             if result.returncode == 0:
-                self.notify(f"✅ {action} executado com sucesso!")
+                self.notify(f"✅ {command} executado com sucesso!")
             else:
-                self.notify(f"❌ {action} falhou (code: {result.returncode})", severity="error")
+                self.notify(f"❌ {command} falhou (code: {result.returncode})", severity="error")
                 
         except Exception as e:
-            self.notify(f"❌ Erro ao executar {action}: {str(e)}", severity="error")
-    
+            self.notify(f"❌ Erro ao executar {command}: {str(e)}", severity="error")
+
     def on_params_result(self, params: Dict[str, str]) -> None:
         """Handle parameters form result."""
         if params:
-            self.run_params_command(params)
+            self.run_report(params)
     
     def run_params_command(self, params: Dict[str, str]) -> None:
         """Run the params-set command with given parameters."""
@@ -546,20 +769,49 @@ Bem-vindo ao Sistema de Gestão de Estoque!
     def on_file_input_result(self, result: Optional[Dict[str, str]]) -> None:
         """Handle file input form result."""
         if result and "file" in result:
-            # We need to determine which operation this was for
-            # For now, we'll handle it in the action context
-            pass
+            file_path = result["file"]
+            # Descobre a operação ativa pelo último action executado
+            # Para garantir, pode-se usar um atributo self.last_file_action
+            # Mas aqui, vamos tentar identificar pelo nome do arquivo ou contexto
+            # Alternativamente, pode-se pedir para o usuário informar novamente, mas vamos assumir entrada-lotes ou saida-lotes
+            # Para simplificar, verifica se o arquivo existe e tenta importar como entrada ou saída
+            import os
+            if not os.path.exists(file_path):
+                self.push_screen(OutputScreen("Arquivo não encontrado", f"Arquivo '{file_path}' não existe."))
+                return
+            # Tenta importar como entrada ou saída
+            try:
+                resultado = None
+                #Extrai do nome do arquivo se contém entrada ou saída na sua string:
+                if "entrada" in  file_path.lower():
+                    resultado = run_entrada_lote(file_path, DB_PATH)
+                    titulo = "Entradas Importadas"
+                elif "saida" in file_path.lower() or "saída" in file_path.lower():
+                    resultado = run_saida_lote(file_path, DB_PATH)
+                    titulo = "Saídas Importadas"
+                else:
+                    self.push_screen(OutputScreen("Erro ao importar arquivo", "O nome do arquivo precisa conter 'entrada' ou 'saída' para identificação."))
+                if resultado:
+                    # resultado é um dict simples: {"arquivo": path, "linhas_inseridas": count}
+                    # Converte para formato de tabela
+                    colunas = ["Campo", "Valor"]
+                    rows = [[key, str(value)] for key, value in resultado.items()]
+                    self.push_screen(OutputDataTableScreen(titulo, colunas, rows))
+                else:
+                    self.push_screen(OutputScreen("Importação", "Nenhum dado importado."))
+            except Exception as e:
+                self.push_screen(OutputScreen("Erro ao importar arquivo", str(e)))
     
     def on_report_params_result(self, params: Optional[Dict[str, str]]) -> None:
         """Handle report parameters form result."""
         if params:
             # Determine the report type from the params structure
             if "H" in params:
-                self.run_report_command("rel-ruptura", params)
+                self.run_report("rel-ruptura", params)
             elif "D" in params:
-                self.run_report_command("rel-vencimentos", params)
+                self.run_report("rel-vencimentos", params)
             elif "INI" in params and "FIM" in params:
-                self.run_report_command("rel-top", params)
+                self.run_report("rel-top", params)
     
     def run_report_command(self, report_type: str, params: Dict[str, str]) -> None:
         """Run a report command with given parameters."""
@@ -613,6 +865,87 @@ Bem-vindo ao Sistema de Gestão de Estoque!
         """Toggle dark mode."""
         self.dark = not self.dark
         self.notify(f"🌙 Dark mode: {'On' if self.dark else 'Off'}", timeout=2)
+
+    def show_logs_menu(self) -> None:
+        """Show a submenu for different log types."""
+        log_types = [
+            ("Transações", "transactions"),
+            ("Entradas", "entradas"),
+            ("Saídas", "saidas"),
+            ("Banco de Dados", "database"),
+            ("Sistema", "system")
+        ]
+        
+        menu_text = "📋 **VISUALIZAÇÃO DE LOGS**\n\n"
+        menu_text += "Selecione o tipo de log:\n\n"
+        
+        for i, (nome, tipo) in enumerate(log_types, 1):
+            menu_text += f"{i}. {nome}\n"
+        
+        menu_text += "\nPressione ESC para voltar"
+        
+        # Para simplificar, vou mostrar todos os logs de transação por padrão
+        self.show_log_content("transactions")
+
+    def show_log_content(self, log_type: str) -> None:
+        """Show the content of a specific log type."""
+        log_system_event("view_logs", {"log_type": log_type})
+        
+        try:
+            content = get_log_summary(log_type, lines=500)
+            
+            title_map = {
+                "transactions": "📋 Logs de Transações",
+                "entradas": "📥 Logs de Entradas", 
+                "saidas": "📤 Logs de Saídas",
+                "database": "🗃️ Logs do Banco de Dados",
+                "system": "⚙️ Logs do Sistema"
+            }
+            
+            title = title_map.get(log_type, f"📋 Logs - {log_type}")
+            self.push_screen(OutputScreen(title, content))
+            
+        except Exception as e:
+            error_msg = str(e)
+            log_system_event("view_logs_error", {"log_type": log_type, "error": error_msg}, level="error")
+            self.push_screen(OutputScreen("Erro ao carregar logs", error_msg))
+
+    def show_log_summary(self) -> None:
+        """Show a summary of all log activity."""
+        log_system_event("view_log_summary")
+        
+        try:
+            summary_text = "📊 **RESUMO DOS LOGS DO SISTEMA**\n\n"
+            
+            log_files = {
+                "Transações": "transactions.log",
+                "Entradas": "entradas.log",
+                "Saídas": "saidas.log",
+                "Banco de Dados": "database.log",
+                "Sistema": "system.log"
+            }
+            
+            for name, filename in log_files.items():
+                log_path = Path(LOGS_DIR) / filename
+                if log_path.exists():
+                    size_kb = log_path.stat().st_size / 1024
+                    try:
+                        with open(log_path, 'r', encoding='utf-8') as f:
+                            lines = len(f.readlines())
+                        summary_text += f"✅ {name}: {lines} linhas ({size_kb:.1f} KB)\n"
+                    except Exception:
+                        summary_text += f"⚠️ {name}: {size_kb:.1f} KB (erro ao contar linhas)\n"
+                else:
+                    summary_text += f"❌ {name}: Arquivo não encontrado\n"
+            
+            summary_text += f"\n📁 Diretório de logs: {LOGS_DIR}\n"
+            
+            self.push_screen(OutputScreen("Resumo dos Logs", summary_text))
+            
+        except Exception as e:
+            error_msg = str(e)
+            log_system_event("view_log_summary_error", {"error": error_msg}, level="error")
+            self.push_screen(OutputScreen("Erro ao gerar resumo", error_msg))
 
 
 def main() -> None:

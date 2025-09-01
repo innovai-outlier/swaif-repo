@@ -1,5 +1,5 @@
 # ====== CONFIG ======
-PY?=python3
+PY?=python3.10
 VENV?=.venv
 PIP=$(VENV)/bin/pip
 PYTHON=$(VENV)/bin/python
@@ -35,7 +35,8 @@ help:
 # ====== VENV / INSTALL ======
 $(VENV):
 	$(PY) -m venv $(VENV)
-	$(PIP) install --upgrade pip setuptools wheel
+	$(PY) -m pip install --upgrade pip
+	$(PIP) install setuptools wheel
 
 .PHONY: venv
 venv: $(VENV)

@@ -19,6 +19,16 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import re
 from datetime import datetime
+import logging
+# ---------------------------
+# utilitários de normalização
+# ---------------------------
+
+# Configuração básica do logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 
 # ---------------------------
@@ -207,11 +217,13 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
       - representante: str | None
       - pago: 0/1 | None
     """
-    df = pd.read_excel(path, dtype="string")
+    logging.info(f"Lendo planilha de ENTRADAS: {path}")
+    df = pd.read_excel(path, dtype="string", engine="openpyxl")
+    logging.info(f"Planilha carregada com {len(df)} linhas.")
     df = _ensure_str_cols(df)
     df = _normalize_columns(df)
     out: List[Dict[str, Any]] = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         data_entrada = _first_nonnull(_safe_get(row, "data_entrada"), _safe_get(row, "data"))
         rec = {
             "produto": _safe_get(row, "produto"),
@@ -225,7 +237,9 @@ def load_entradas_from_xlsx(path: str) -> List[Dict[str, Any]]:
             "representante": _safe_get(row, "representante"),
             "pago": _to_bool01(_safe_get(row, "pago")),
         }
+        logging.info(f"Preparando registro de entrada [{idx+1}/{len(df)}]: {rec}")
         out.append(rec)
+    logging.info(f"Total de registros de entrada preparados: {len(out)}")
     return out
 
 
@@ -243,11 +257,13 @@ def load_saidas_from_xlsx(path: str) -> List[Dict[str, Any]]:
       - responsavel: str | None
       - descarte_flag: 0/1 | None
     """
-    df = pd.read_excel(path, dtype="string")
+    logging.info(f"Lendo planilha de SAÍDAS: {path}")
+    df = pd.read_excel(path, dtype="string", engine="openpyxl")
+    logging.info(f"Planilha carregada com {len(df)} linhas.")
     df = _ensure_str_cols(df)
     df = _normalize_columns(df)
     out: List[Dict[str, Any]] = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         data_saida = _first_nonnull(_safe_get(row, "data_saida"), _safe_get(row, "data"))
         rec = {
             "data_saida": _to_date_iso(data_saida),
@@ -260,5 +276,7 @@ def load_saidas_from_xlsx(path: str) -> List[Dict[str, Any]]:
             "responsavel": _safe_get(row, "responsavel"),
             "descarte_flag": _to_bool01(_safe_get(row, "descarte_flag")),
         }
+        logging.info(f"Preparando registro de saída [{idx+1}/{len(df)}]: {rec}")
         out.append(rec)
+    logging.info(f"Total de registros de saída preparados: {len(out)}")
     return out

@@ -78,6 +78,11 @@ class ParamsRepo:
         except Exception:
             return default
 
+    def delete_all(self) -> None:
+        with connect(self.db_path) as c:
+            c.execute("PRAGMA foreign_keys = OFF")
+            c.execute("DELETE FROM params")
+            c.execute("PRAGMA foreign_keys = ON")
 
 # -------------------------
 # Produto
@@ -121,6 +126,10 @@ class ProdutoRepo:
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
+    def delete_all(self) -> None:
+        with connect(self.db_path) as c:
+            c.execute("DELETE FROM produto")
+
 
 # -------------------------
 # Dimensão de Consumo
@@ -163,7 +172,11 @@ class DimConsumoRepo:
             cols = [d[0] for d in cur.description]
             return {row[0]: dict(zip(cols, row)) for row in cur.fetchall()}
 
-
+    def delete_all(self) -> None:
+        with connect(self.db_path) as c:
+            c.execute("PRAGMA foreign_keys = OFF")
+            c.execute("DELETE FROM dim_consumo")
+            c.execute("PRAGMA foreign_keys = ON")
 # -------------------------
 # Snapshot de lotes
 # -------------------------
@@ -226,6 +239,12 @@ class SnapshotRepo:
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
+    def delete_all(self) -> None:
+        with connect(self.db_path) as c:
+            c.execute("PRAGMA foreign_keys = OFF")
+            c.execute("DELETE FROM estoque_lote_snapshot")
+            c.execute("PRAGMA foreign_keys = ON")
+
 
 # -------------------------
 # Movimentações: Entrada / Saída
@@ -274,6 +293,11 @@ class EntradaRepo:
                 rows,
             )
 
+    def delete_all(self) -> None:
+        with connect(self.db_path) as c:
+            c.execute("PRAGMA foreign_keys = OFF")
+            c.execute("DELETE FROM entrada")
+            c.execute("PRAGMA foreign_keys = ON")
 
 class SaidaRepo:
     def __init__(self, db_path: str):
@@ -310,7 +334,12 @@ class SaidaRepo:
                 """,
                 rows,
             )
-
+            
+    def delete_all(self) -> None:
+        with connect(self.db_path) as c:
+            c.execute("PRAGMA foreign_keys = OFF")
+            c.execute("DELETE FROM saida")
+            c.execute("PRAGMA foreign_keys = ON")
 
 # -------------------------
 # Demanda
@@ -468,3 +497,9 @@ class DemandaRepo:
                 }
             )
         return out
+    def delete_all(self) -> None:
+        with connect(self.db_path) as c:
+            c.execute("PRAGMA foreign_keys = OFF")
+            c.execute("DELETE FROM demanda_diaria")
+            c.execute("DELETE FROM demanda_mensal")
+            c.execute("PRAGMA foreign_keys = ON")

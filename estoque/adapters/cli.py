@@ -44,17 +44,6 @@ console = Console()
 
 
 # -----------------------
-# TUI command
-# -----------------------
-
-@app.command("tui")
-def cmd_tui():
-    """Inicia a interface terminal interativa (TUI)."""
-    from estoque.adapters.tui import main_tui
-    main_tui()
-
-
-# -----------------------
 # util
 # -----------------------
 
@@ -411,7 +400,12 @@ def rel_reposicao_cmd(
     """Gera relatório de sugestões de reposição de estoque."""
     res = relatorio_reposicao(db_path=db_path)
     _display_table(res, title="Relatório de Reposição de Estoque")
-    
+
+
+# -----------------------
+# TUI command
+# -----------------------
+ 
 @app.command("tui")
 def cmd_tui():
     """
